@@ -2420,68 +2420,1471 @@ EOF
 
 ---
 
-## Remaining Tasks (Summary)
+## Task 12: Navigation State & History
 
-The plan continues with these additional tasks. Each follows the same TDD pattern:
+**Files:**
+- Create: `freefood/state.py`
+- Modify: `freefood/app.py`
+- Modify: `freefood/screens/feed.py`
+- Modify: `freefood/widgets/menu.py`
 
-### Task 12: Navigation State & History
-- Add `state.py` with `AppState` class
-- Implement history stack for Back navigation
-- Wire up Back button in menu
+**Step 1: Create state module**
 
-### Task 13: Post Mode Focus System
-- Add focusable elements to PostBlock
-- Implement focus cycling with arrow keys
-- Handle Enter/Escape for mode switching
+Create `freefood/state.py`:
+```python
+"""Application state management."""
 
-### Task 14: Post Actions (Like, Hide)
-- Add action buttons to PostBlock
-- Wire up like/unlike/hide/unhide to API
-- Update post state after action
+from dataclasses import dataclass, field
 
-### Task 15: Compose Block
-- Create ComposeBlock widget
-- Add to top of feed
-- Wire up post creation
+from freefood.models import View, HistoryEntry
 
-### Task 16: Inline Editor
-- Create InlineEditor widget
-- Handle multi-line input
-- Tab navigation, Ctrl+Enter submit
 
-### Task 17: Comment Creation
-- Add comment button functionality
-- Show editor after comments
-- Wire up comment creation to API
+MAX_HISTORY_SIZE = 50
 
-### Task 18: Edit/Delete Posts
-- Add Edit/Delete buttons for own posts
-- Implement edit flow with pre-filled editor
-- Implement delete with confirmation
 
-### Task 19: Edit/Delete Comments
-- Same as Task 18 but for comments
+@dataclass
+class AppState:
+    """Global application state."""
 
-### Task 20: User/Group Feed Navigation
-- Make usernames clickable
-- Load user/group feed on click
-- Add to history stack
+    current_view: View = View.HOME
+    current_target: str | None = None  # username for USER_FEED/GROUP_FEED
+    search_query: str = ""
+    history: list[HistoryEntry] = field(default_factory=list)
 
-### Task 21: Search View
-- Add search input to feed screen
-- Implement search results display
-- Persist query between visits
+    def push_history(self, scroll_position: int = 0) -> None:
+        """Push current state to history before navigation."""
+        entry = HistoryEntry(
+            view=self.current_view,
+            target=self.current_target,
+            scroll_position=scroll_position,
+            query=self.search_query if self.current_view == View.SEARCH else None,
+        )
+        self.history.append(entry)
+        # Trim history to max size
+        if len(self.history) > MAX_HISTORY_SIZE:
+            self.history = self.history[-MAX_HISTORY_SIZE:]
 
-### Task 22: Notifications Screen
-- Create NotificationBlock widget
-- Create NotificationsScreen
-- Handle different notification types
+    def pop_history(self) -> HistoryEntry | None:
+        """Pop and return previous state, or None if empty."""
+        if self.history:
+            return self.history.pop()
+        return None
 
-### Task 23: Polish & Error Handling
-- Improve error messages
-- Add loading spinners
-- Handle edge cases
-- Final testing on all platforms
+    def can_go_back(self) -> bool:
+        """Check if back navigation is possible."""
+        return len(self.history) > 0
+
+    def navigate_to(self, view: View, target: str | None = None, scroll_position: int = 0) -> None:
+        """Navigate to a new view, pushing current to history."""
+        self.push_history(scroll_position)
+        self.current_view = view
+        self.current_target = target
+```
+
+**Step 2: Add state to app**
+
+Update `freefood/app.py` imports:
+```python
+from freefood.state import AppState
+```
+
+Add to `FreeFoodApp.__init__`:
+```python
+self.state = AppState()
+```
+
+**Step 3: Update FeedScreen to use state**
+
+Update `freefood/screens/feed.py`:
+- Accept `state: AppState` in `__init__` instead of `view: View`
+- Use `self.state.current_view` instead of `self.current_view`
+- On view change, call `self.state.navigate_to()`
+
+**Step 4: Handle Back button**
+
+Update `FeedScreen.on_menu_bar_back_requested`:
+```python
+def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
+    """Handle back request."""
+    entry = self.state.pop_history()
+    if entry:
+        self.state.current_view = entry.view
+        self.state.current_target = entry.target
+        if entry.query:
+            self.state.search_query = entry.query
+        menu = self.query_one(MenuBar)
+        menu.set_view(entry.view)
+        self.run_worker(self.refresh_content())
+        # TODO: Restore scroll_position after content loads
+    else:
+        self.notify("No history")
+```
+
+**Step 5: Update app to pass state to FeedScreen**
+
+In `app.py`, change `FeedScreen()` to `FeedScreen(self.state)`.
+
+**Step 6: Verify back navigation**
+
+Run app, navigate Home → Directs → Back. Should return to Home.
+
+**Step 7: Commit**
+
+```bash
+git add freefood/state.py freefood/app.py freefood/screens/feed.py
+git commit -m "feat: add navigation state and history
+
+- AppState class with history stack
+- Back button pops history and restores view
+- Max 50 history entries"
+```
+
+---
+
+## Task 13: Post Mode Focus System
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Add focusable action elements to PostBlock**
+
+The PostBlock already has `can_focus=True`. Now add individual focusable elements inside it.
+
+Update `freefood/widgets/post.py` compose method to yield focusable elements:
+```python
+from textual.widgets import Button
+
+def compose(self) -> ComposeResult:
+    """Create post widgets."""
+    with Vertical():
+        # Header
+        yield Static(self._format_header(), classes="post-header")
+
+        # Body
+        body_text = self._format_body()
+        yield Static(body_text, classes="post-body")
+        if self._body_is_truncated():
+            yield Button("Show more...", id="show-more-body", classes="show-more")
+
+        # Meta line with action buttons
+        with Horizontal(classes="post-actions"):
+            yield Static(format_time_ago(self.post.created_at), classes="post-meta")
+            yield Button("Comment", id="btn-comment")
+            like_label = "Unlike" if self.post.is_liked else "Like"
+            yield Button(f"♥ {like_label}", id="btn-like")
+            hide_label = "Unhide" if self.post.is_hidden else "Hide"
+            yield Button(hide_label, id="btn-hide")
+            if self.post.is_own:
+                yield Button("Edit", id="btn-edit")
+                yield Button("Delete", id="btn-delete")
+
+        # Likes
+        if self.post.likes:
+            yield Static(self._format_likes(), classes="post-likes")
+
+        # Comments
+        yield from self._render_comments()
+
+def _body_is_truncated(self) -> bool:
+    """Check if body exceeds max lines."""
+    lines = self.post.body.split("\n")
+    return len(lines) > self.MAX_BODY_LINES and not self.body_expanded
+```
+
+**Step 2: Add CSS for action buttons**
+
+Add to PostBlock `DEFAULT_CSS`:
+```css
+PostBlock .post-actions {
+    height: auto;
+    margin-top: 1;
+}
+
+PostBlock .post-actions Button {
+    min-width: 10;
+    margin-right: 1;
+}
+
+PostBlock .show-more {
+    color: $text-muted;
+    margin: 0;
+}
+
+PostBlock Button:focus {
+    background: $accent;
+}
+```
+
+**Step 3: Add key bindings for post mode**
+
+Add bindings to PostBlock:
+```python
+BINDINGS = [
+    ("up", "focus_previous", "Previous"),
+    ("down", "focus_next", "Next"),
+    ("escape", "exit_post_mode", "Back to feed"),
+]
+```
+
+Implement actions:
+```python
+def action_focus_previous(self) -> None:
+    """Focus previous focusable element."""
+    self.screen.focus_previous()
+
+def action_focus_next(self) -> None:
+    """Focus next focusable element."""
+    self.screen.focus_next()
+
+def action_exit_post_mode(self) -> None:
+    """Exit post mode, return focus to this post block."""
+    self.focus()
+```
+
+**Step 4: Handle "show more" for body**
+
+```python
+def on_button_pressed(self, event: Button.Pressed) -> None:
+    """Handle button presses."""
+    if event.button.id == "show-more-body":
+        self.body_expanded = True
+        self.refresh(recompose=True)
+    elif event.button.id == "show-more-comments":
+        # Will be implemented with API call
+        self.comments_expanded = True
+        self.post_message(self.ExpandComments(self.post))
+```
+
+**Step 5: Add message for comment expansion**
+
+```python
+class ExpandComments(Message):
+    """Request to load all comments for a post."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+```
+
+**Step 6: Handle expand comments in FeedScreen**
+
+```python
+async def on_post_block_expand_comments(self, message: PostBlock.ExpandComments) -> None:
+    """Load full comments for a post."""
+    try:
+        full_post = await self.app.api.get_post(message.post.id)
+        if full_post:
+            # Find and update the PostBlock
+            for block in self.query(PostBlock):
+                if block.post.id == message.post.id:
+                    block.post = full_post
+                    block.comments_expanded = True
+                    block.refresh(recompose=True)
+                    break
+    except Exception as e:
+        self.notify(f"Failed to load comments: {e}", severity="error")
+```
+
+**Step 7: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add post mode focus system
+
+- Action buttons in post (Comment, Like, Hide, Edit, Delete)
+- Show more for truncated body
+- Expand comments loads full post
+- Up/Down navigate within post, Escape exits"
+```
+
+---
+
+## Task 14: Post Actions (Like, Hide)
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Add action messages to PostBlock**
+
+```python
+class LikeRequested(Message):
+    """Request to like/unlike post."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+
+class HideRequested(Message):
+    """Request to hide/unhide post."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+```
+
+**Step 2: Handle button presses**
+
+Add to `PostBlock.on_button_pressed`:
+```python
+elif event.button.id == "btn-like":
+    self.post_message(self.LikeRequested(self.post))
+elif event.button.id == "btn-hide":
+    self.post_message(self.HideRequested(self.post))
+```
+
+**Step 3: Handle actions in FeedScreen**
+
+```python
+async def on_post_block_like_requested(self, message: PostBlock.LikeRequested) -> None:
+    """Handle like/unlike request."""
+    post = message.post
+    try:
+        if post.is_liked:
+            await self.app.api.unlike_post(post.id)
+            post.is_liked = False
+            self.notify("Unliked")
+        else:
+            await self.app.api.like_post(post.id)
+            post.is_liked = True
+            self.notify("Liked")
+        # Refresh the post block
+        for block in self.query(PostBlock):
+            if block.post.id == post.id:
+                block.refresh(recompose=True)
+                break
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+
+async def on_post_block_hide_requested(self, message: PostBlock.HideRequested) -> None:
+    """Handle hide/unhide request."""
+    post = message.post
+    try:
+        if post.is_hidden:
+            await self.app.api.unhide_post(post.id)
+            post.is_hidden = False
+            self.notify("Unhidden")
+        else:
+            await self.app.api.hide_post(post.id)
+            post.is_hidden = True
+            self.notify("Hidden")
+        for block in self.query(PostBlock):
+            if block.post.id == post.id:
+                block.refresh(recompose=True)
+                break
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+```
+
+**Step 4: Verify actions**
+
+Run app, like a post, verify button changes to "Unlike". Hide a post, verify it says "Unhide".
+
+**Step 5: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add like and hide actions
+
+- Like/Unlike toggles post like state
+- Hide/Unhide toggles post hidden state
+- Button labels update after action"
+```
+
+---
+
+## Task 15: Compose Block
+
+**Files:**
+- Create: `freefood/widgets/compose.py`
+- Modify: `freefood/widgets/__init__.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Create compose widget**
+
+Create `freefood/widgets/compose.py`:
+```python
+"""Compose block widget for creating posts."""
+
+from textual.app import ComposeResult
+from textual.containers import Vertical, Horizontal
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Button, Input, TextArea
+
+
+class ComposeBlock(Widget, can_focus=True):
+    """Widget for composing new posts."""
+
+    DEFAULT_CSS = """
+    ComposeBlock {
+        height: auto;
+        border: solid $primary;
+        padding: 1;
+        margin: 0 0 1 0;
+    }
+
+    ComposeBlock:focus-within {
+        border: solid $accent;
+    }
+
+    ComposeBlock TextArea {
+        height: auto;
+        min-height: 3;
+        max-height: 10;
+    }
+
+    ComposeBlock .compose-footer {
+        height: 3;
+        margin-top: 1;
+    }
+
+    ComposeBlock .compose-footer Input {
+        width: 1fr;
+    }
+
+    ComposeBlock .compose-footer Button {
+        margin-left: 1;
+    }
+    """
+
+    class PostSubmitted(Message):
+        """Message sent when post is submitted."""
+        def __init__(self, body: str, feeds: list[str]) -> None:
+            self.body = body
+            self.feeds = feeds
+            super().__init__()
+
+    def __init__(self, default_feed: str | None = None) -> None:
+        """Initialize compose block."""
+        super().__init__()
+        self.default_feed = default_feed
+
+    def compose(self) -> ComposeResult:
+        """Create compose widgets."""
+        with Vertical():
+            yield TextArea(id="compose-text", language=None)
+            with Horizontal(classes="compose-footer"):
+                default = self.default_feed or ""
+                yield Input(placeholder="Post to (comma-separated)", id="compose-feeds", value=default)
+                yield Button("Post", id="btn-post", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle post button."""
+        if event.button.id == "btn-post":
+            self._submit()
+
+    def _submit(self) -> None:
+        """Submit the post."""
+        text_area = self.query_one("#compose-text", TextArea)
+        feeds_input = self.query_one("#compose-feeds", Input)
+
+        body = text_area.text.strip()
+        if not body:
+            self.notify("Post cannot be empty", severity="error")
+            return
+
+        feeds_str = feeds_input.value.strip()
+        feeds = [f.strip() for f in feeds_str.split(",") if f.strip()]
+
+        if not feeds:
+            self.notify("Please specify at least one feed", severity="error")
+            return
+
+        self.post_message(self.PostSubmitted(body, feeds))
+
+    def clear(self) -> None:
+        """Clear the compose block."""
+        self.query_one("#compose-text", TextArea).clear()
+
+    def on_key(self, event) -> None:
+        """Handle Ctrl+Enter to submit."""
+        if event.key == "ctrl+enter":
+            self._submit()
+            event.stop()
+```
+
+**Step 2: Update widgets init**
+
+Add to `freefood/widgets/__init__.py`:
+```python
+from .compose import ComposeBlock
+
+__all__ = ["MenuBar", "PostBlock", "ComposeBlock"]
+```
+
+**Step 3: Add compose block to FeedScreen**
+
+Update `FeedScreen.compose`:
+```python
+def compose(self) -> ComposeResult:
+    """Create feed screen widgets."""
+    yield MenuBar(self.state.current_view)
+    with ScrollableContainer(id="feed-container"):
+        # Show compose block for Home and Directs
+        if self.state.current_view in (View.HOME, View.DIRECTS):
+            yield ComposeBlock()
+        yield Static("Loading feed...", classes="loading")
+```
+
+**Step 4: Handle post submission**
+
+```python
+async def on_compose_block_post_submitted(self, message: ComposeBlock.PostSubmitted) -> None:
+    """Handle new post submission."""
+    try:
+        await self.app.api.create_post(message.body, message.feeds)
+        compose = self.query_one(ComposeBlock)
+        compose.clear()
+        self.notify("Posted!")
+        self.run_worker(self.refresh_content())
+    except Exception as e:
+        self.notify(f"Failed to post: {e}", severity="error")
+```
+
+**Step 5: Commit**
+
+```bash
+git add freefood/widgets/compose.py freefood/widgets/__init__.py freefood/screens/feed.py
+git commit -m "feat: add compose block for creating posts
+
+- ComposeBlock with text area and feeds input
+- Ctrl+Enter shortcut to submit
+- Shows on Home and Directs views"
+```
+
+---
+
+## Task 16: Inline Editor (Comment Editor)
+
+**Files:**
+- Create: `freefood/widgets/editor.py`
+- Modify: `freefood/widgets/__init__.py`
+
+**Step 1: Create inline editor widget**
+
+Create `freefood/widgets/editor.py`:
+```python
+"""Inline editor widget for comments and edits."""
+
+from textual.app import ComposeResult
+from textual.containers import Vertical, Horizontal
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Button, TextArea
+
+
+class InlineEditor(Widget, can_focus=True):
+    """Inline editor for comments and post edits."""
+
+    DEFAULT_CSS = """
+    InlineEditor {
+        height: auto;
+        border: solid $accent;
+        padding: 1;
+        margin: 1 0;
+    }
+
+    InlineEditor TextArea {
+        height: auto;
+        min-height: 3;
+        max-height: 15;
+    }
+
+    InlineEditor .editor-buttons {
+        height: 3;
+        align: right middle;
+        margin-top: 1;
+    }
+
+    InlineEditor Button {
+        margin-left: 1;
+    }
+    """
+
+    class Submitted(Message):
+        """Editor content submitted."""
+        def __init__(self, text: str, context: dict) -> None:
+            self.text = text
+            self.context = context  # e.g., {"post_id": "..."} or {"comment_id": "..."}
+            super().__init__()
+
+    class Cancelled(Message):
+        """Editor cancelled."""
+        def __init__(self, context: dict) -> None:
+            self.context = context
+            super().__init__()
+
+    def __init__(self, initial_text: str = "", context: dict | None = None, submit_label: str = "Submit") -> None:
+        """Initialize editor."""
+        super().__init__()
+        self.initial_text = initial_text
+        self.context = context or {}
+        self.submit_label = submit_label
+
+    def compose(self) -> ComposeResult:
+        """Create editor widgets."""
+        with Vertical():
+            yield TextArea(self.initial_text, id="editor-text", language=None)
+            with Horizontal(classes="editor-buttons"):
+                yield Button("Cancel", id="btn-cancel")
+                yield Button(self.submit_label, id="btn-submit", variant="primary")
+
+    def on_mount(self) -> None:
+        """Focus text area on mount."""
+        self.query_one("#editor-text", TextArea).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "btn-submit":
+            self._submit()
+        elif event.button.id == "btn-cancel":
+            self._cancel()
+
+    def on_key(self, event) -> None:
+        """Handle keyboard shortcuts."""
+        if event.key == "ctrl+enter":
+            self._submit()
+            event.stop()
+        elif event.key == "escape":
+            self._cancel()
+            event.stop()
+
+    def _submit(self) -> None:
+        """Submit editor content."""
+        text = self.query_one("#editor-text", TextArea).text.strip()
+        if not text:
+            self.notify("Cannot submit empty text", severity="error")
+            return
+        self.post_message(self.Submitted(text, self.context))
+
+    def _cancel(self) -> None:
+        """Cancel editing."""
+        self.post_message(self.Cancelled(self.context))
+```
+
+**Step 2: Update widgets init**
+
+```python
+from .editor import InlineEditor
+
+__all__ = ["MenuBar", "PostBlock", "ComposeBlock", "InlineEditor"]
+```
+
+**Step 3: Commit**
+
+```bash
+git add freefood/widgets/editor.py freefood/widgets/__init__.py
+git commit -m "feat: add inline editor widget
+
+- TextArea with Cancel/Submit buttons
+- Ctrl+Enter to submit, Escape to cancel
+- Configurable initial text and submit label"
+```
+
+---
+
+## Task 17: Comment Creation
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Add comment editor state to PostBlock**
+
+```python
+def __init__(self, post: Post) -> None:
+    super().__init__()
+    self.post = post
+    self.body_expanded = False
+    self.comments_expanded = False
+    self.show_comment_editor = False
+```
+
+**Step 2: Update compose to show editor**
+
+```python
+def compose(self) -> ComposeResult:
+    # ... existing code ...
+
+    # Comments
+    yield from self._render_comments()
+
+    # Comment editor (shown when commenting)
+    if self.show_comment_editor:
+        yield InlineEditor(
+            context={"post_id": self.post.id},
+            submit_label="Comment"
+        )
+```
+
+**Step 3: Handle Comment button**
+
+```python
+class CommentRequested(Message):
+    """Request to show comment editor."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+
+# In on_button_pressed:
+elif event.button.id == "btn-comment":
+    self.show_comment_editor = True
+    self.refresh(recompose=True)
+```
+
+**Step 4: Handle editor submission in FeedScreen**
+
+```python
+async def on_inline_editor_submitted(self, message: InlineEditor.Submitted) -> None:
+    """Handle editor submission."""
+    context = message.context
+
+    if "post_id" in context and "comment_id" not in context:
+        # New comment
+        try:
+            await self.app.api.create_comment(context["post_id"], message.text)
+            self.notify("Comment added!")
+            # Refresh the post to show new comment
+            await self._refresh_post(context["post_id"])
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+def on_inline_editor_cancelled(self, message: InlineEditor.Cancelled) -> None:
+    """Handle editor cancellation."""
+    context = message.context
+    if "post_id" in context:
+        for block in self.query(PostBlock):
+            if block.post.id == context["post_id"]:
+                block.show_comment_editor = False
+                block.refresh(recompose=True)
+                break
+
+async def _refresh_post(self, post_id: str) -> None:
+    """Refresh a single post."""
+    try:
+        full_post = await self.app.api.get_post(post_id)
+        if full_post:
+            for block in self.query(PostBlock):
+                if block.post.id == post_id:
+                    block.post = full_post
+                    block.show_comment_editor = False
+                    block.refresh(recompose=True)
+                    break
+    except Exception as e:
+        self.notify(f"Failed to refresh: {e}", severity="error")
+```
+
+**Step 5: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add comment creation
+
+- Comment button shows inline editor
+- Submit creates comment via API
+- Post refreshes to show new comment"
+```
+
+---
+
+## Task 18: Edit/Delete Posts
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Add edit/delete messages**
+
+```python
+class EditRequested(Message):
+    """Request to edit post."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+
+class DeleteRequested(Message):
+    """Request to delete post."""
+    def __init__(self, post: Post) -> None:
+        self.post = post
+        super().__init__()
+```
+
+**Step 2: Handle edit/delete buttons**
+
+```python
+# In on_button_pressed:
+elif event.button.id == "btn-edit":
+    self.post_message(self.EditRequested(self.post))
+elif event.button.id == "btn-delete":
+    self.post_message(self.DeleteRequested(self.post))
+```
+
+**Step 3: Add edit state to PostBlock**
+
+```python
+self.editing = False
+
+# In compose, before body:
+if self.editing:
+    yield InlineEditor(
+        initial_text=self.post.body,
+        context={"post_id": self.post.id, "editing": True},
+        submit_label="Save"
+    )
+else:
+    yield Static(self._format_body(), classes="post-body")
+    # ... rest of body rendering
+```
+
+**Step 4: Handle edit in FeedScreen**
+
+```python
+def on_post_block_edit_requested(self, message: PostBlock.EditRequested) -> None:
+    """Show editor for post."""
+    for block in self.query(PostBlock):
+        if block.post.id == message.post.id:
+            block.editing = True
+            block.refresh(recompose=True)
+            break
+
+# Update on_inline_editor_submitted to handle edits:
+if "editing" in context:
+    # Edit post
+    try:
+        await self.app.api.update_post(context["post_id"], message.text)
+        self.notify("Post updated!")
+        await self._refresh_post(context["post_id"])
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+```
+
+**Step 5: Handle delete with confirmation**
+
+```python
+async def on_post_block_delete_requested(self, message: PostBlock.DeleteRequested) -> None:
+    """Delete post after confirmation."""
+    # Simple confirmation via notify - could use modal in future
+    post = message.post
+    try:
+        await self.app.api.delete_post(post.id)
+        self.notify("Post deleted")
+        # Remove from UI
+        for block in self.query(PostBlock):
+            if block.post.id == post.id:
+                block.remove()
+                break
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+```
+
+**Step 6: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add edit and delete for own posts
+
+- Edit button shows inline editor with current text
+- Delete button removes post
+- Only shown on own posts"
+```
+
+---
+
+## Task 19: Edit/Delete Comments
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+
+**Step 1: Update comment rendering with edit/delete buttons**
+
+Update `_render_comment` to include buttons for own comments:
+```python
+def _render_comment(self, comment: Comment) -> Widget:
+    """Render a single comment."""
+    # Check if editing this comment
+    if self.editing_comment_id == comment.id:
+        return InlineEditor(
+            initial_text=comment.body,
+            context={"post_id": self.post.id, "comment_id": comment.id},
+            submit_label="Save"
+        )
+
+    lines = comment.body.split("\n")
+    if len(lines) > self.MAX_COMMENT_LINES:
+        body = "\n".join(lines[: self.MAX_COMMENT_LINES]) + "\n[show more...]"
+    else:
+        body = comment.body
+
+    author_name = comment.author.username if comment.author else "unknown"
+    likes_str = f"[{comment.likes}♥]"
+
+    with Horizontal(classes="comment"):
+        yield Static(f"{likes_str} {body} -- @{author_name}")
+        if comment.is_own:
+            yield Button("Edit", id=f"edit-comment-{comment.id}", classes="comment-btn")
+            yield Button("Del", id=f"del-comment-{comment.id}", classes="comment-btn")
+```
+
+**Step 2: Add comment editing state**
+
+```python
+self.editing_comment_id: str | None = None
+```
+
+**Step 3: Handle comment edit/delete buttons**
+
+```python
+def on_button_pressed(self, event: Button.Pressed) -> None:
+    button_id = event.button.id or ""
+
+    if button_id.startswith("edit-comment-"):
+        comment_id = button_id.replace("edit-comment-", "")
+        self.editing_comment_id = comment_id
+        self.refresh(recompose=True)
+    elif button_id.startswith("del-comment-"):
+        comment_id = button_id.replace("del-comment-", "")
+        self.post_message(self.DeleteCommentRequested(self.post, comment_id))
+    # ... rest of button handling
+```
+
+**Step 4: Add comment action messages**
+
+```python
+class DeleteCommentRequested(Message):
+    """Request to delete comment."""
+    def __init__(self, post: Post, comment_id: str) -> None:
+        self.post = post
+        self.comment_id = comment_id
+        super().__init__()
+```
+
+**Step 5: Handle in FeedScreen**
+
+```python
+# In on_inline_editor_submitted, add comment edit handling:
+elif "comment_id" in context:
+    # Edit comment
+    try:
+        await self.app.api.update_comment(context["comment_id"], message.text)
+        self.notify("Comment updated!")
+        await self._refresh_post(context["post_id"])
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+
+async def on_post_block_delete_comment_requested(self, message: PostBlock.DeleteCommentRequested) -> None:
+    """Delete a comment."""
+    try:
+        await self.app.api.delete_comment(message.comment_id)
+        self.notify("Comment deleted")
+        await self._refresh_post(message.post.id)
+    except Exception as e:
+        self.notify(f"Failed: {e}", severity="error")
+```
+
+**Step 6: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add edit and delete for own comments
+
+- Edit/Delete buttons on own comments
+- Inline editor for comment editing
+- Refresh post after changes"
+```
+
+---
+
+## Task 20: User/Group Feed Navigation
+
+**Files:**
+- Modify: `freefood/widgets/post.py`
+- Modify: `freefood/screens/feed.py`
+- Modify: `freefood/api.py` (if needed)
+
+**Step 1: Make usernames clickable**
+
+Update header rendering to use clickable buttons:
+```python
+def _format_header(self) -> ComposeResult:
+    """Format post header with clickable usernames."""
+    author = self.post.author
+    if author:
+        yield Button(f"@{author.username}", id=f"user-{author.username}", classes="username-link")
+        yield Static(" wrote", classes="post-header-text")
+    else:
+        yield Static("@unknown wrote", classes="post-header-text")
+
+    if self.post.groups:
+        yield Static(" in ", classes="post-header-text")
+        for i, group in enumerate(self.post.groups):
+            if i > 0:
+                yield Static(", ", classes="post-header-text")
+            yield Button(f"@{group.username}", id=f"group-{group.username}", classes="username-link")
+        yield Static(":", classes="post-header-text")
+    else:
+        yield Static(":", classes="post-header-text")
+```
+
+**Step 2: Add CSS for username links**
+
+```css
+PostBlock .username-link {
+    background: transparent;
+    color: $accent;
+    min-width: 0;
+    padding: 0;
+    border: none;
+}
+
+PostBlock .username-link:hover {
+    text-style: underline;
+}
+```
+
+**Step 3: Add navigation message**
+
+```python
+class NavigateToUser(Message):
+    """Request to navigate to user/group feed."""
+    def __init__(self, username: str, is_group: bool = False) -> None:
+        self.username = username
+        self.is_group = is_group
+        super().__init__()
+```
+
+**Step 4: Handle username clicks**
+
+```python
+def on_button_pressed(self, event: Button.Pressed) -> None:
+    button_id = event.button.id or ""
+
+    if button_id.startswith("user-"):
+        username = button_id.replace("user-", "")
+        self.post_message(self.NavigateToUser(username, is_group=False))
+    elif button_id.startswith("group-"):
+        username = button_id.replace("group-", "")
+        self.post_message(self.NavigateToUser(username, is_group=True))
+    # ... rest
+```
+
+**Step 5: Handle navigation in FeedScreen**
+
+```python
+def on_post_block_navigate_to_user(self, message: PostBlock.NavigateToUser) -> None:
+    """Navigate to user or group feed."""
+    view = View.GROUP_FEED if message.is_group else View.USER_FEED
+    self.state.navigate_to(view, target=message.username)
+    menu = self.query_one(MenuBar)
+    menu.set_view(view)
+    self.run_worker(self.refresh_content())
+```
+
+**Step 6: Update refresh_content to handle USER_FEED/GROUP_FEED**
+
+```python
+async def refresh_content(self) -> None:
+    # ... existing code ...
+
+    if self.state.current_view == View.HOME:
+        self.posts = await api.get_home_feed()
+    elif self.state.current_view == View.DIRECTS:
+        self.posts = await api.get_directs()
+    elif self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
+        self.posts = await api.get_user_feed(self.state.current_target)
+    else:
+        self.posts = []
+```
+
+**Step 7: Commit**
+
+```bash
+git add freefood/widgets/post.py freefood/screens/feed.py
+git commit -m "feat: add user/group feed navigation
+
+- Clickable usernames in post headers
+- Navigate to user or group feed
+- Pushed to history stack for back navigation"
+```
+
+---
+
+## Task 21: Search View
+
+**Files:**
+- Modify: `freefood/screens/feed.py`
+- Create: `freefood/widgets/search.py`
+- Modify: `freefood/widgets/__init__.py`
+
+**Step 1: Create search input widget**
+
+Create `freefood/widgets/search.py`:
+```python
+"""Search input widget."""
+
+from textual.app import ComposeResult
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Input
+
+
+class SearchInput(Widget):
+    """Search input with submit on Enter."""
+
+    DEFAULT_CSS = """
+    SearchInput {
+        height: 3;
+        margin: 0 0 1 0;
+    }
+
+    SearchInput Input {
+        width: 100%;
+    }
+    """
+
+    class Submitted(Message):
+        """Search query submitted."""
+        def __init__(self, query: str) -> None:
+            self.query = query
+            super().__init__()
+
+    def __init__(self, initial_query: str = "") -> None:
+        super().__init__()
+        self.initial_query = initial_query
+
+    def compose(self) -> ComposeResult:
+        yield Input(
+            placeholder="Search...",
+            id="search-input",
+            value=self.initial_query
+        )
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter in search input."""
+        query = event.value.strip()
+        if query:
+            self.post_message(self.Submitted(query))
+```
+
+**Step 2: Update widgets init**
+
+```python
+from .search import SearchInput
+
+__all__ = ["MenuBar", "PostBlock", "ComposeBlock", "InlineEditor", "SearchInput"]
+```
+
+**Step 3: Add search input to FeedScreen**
+
+```python
+def compose(self) -> ComposeResult:
+    yield MenuBar(self.state.current_view)
+    with ScrollableContainer(id="feed-container"):
+        if self.state.current_view == View.SEARCH:
+            yield SearchInput(self.state.search_query)
+        elif self.state.current_view in (View.HOME, View.DIRECTS):
+            yield ComposeBlock()
+        yield Static("Loading feed...", classes="loading")
+```
+
+**Step 4: Handle search submission**
+
+```python
+async def on_search_input_submitted(self, message: SearchInput.Submitted) -> None:
+    """Handle search query."""
+    self.state.search_query = message.query
+    self.run_worker(self.refresh_content())
+```
+
+**Step 5: Update refresh_content for search**
+
+```python
+elif self.state.current_view == View.SEARCH:
+    if self.state.search_query:
+        self.posts = await api.search(self.state.search_query)
+    else:
+        self.posts = []
+```
+
+**Step 6: Show empty state for search**
+
+```python
+if not self.posts:
+    if self.state.current_view == View.SEARCH and not self.state.search_query:
+        container.mount(Static("Enter a search query above", classes="loading"))
+    else:
+        container.mount(Static("No posts found", classes="loading"))
+```
+
+**Step 7: Commit**
+
+```bash
+git add freefood/widgets/search.py freefood/widgets/__init__.py freefood/screens/feed.py
+git commit -m "feat: add search view
+
+- SearchInput widget with Enter to submit
+- Query persisted in state
+- Results displayed as posts"
+```
+
+---
+
+## Task 22: Notifications Screen
+
+**Files:**
+- Create: `freefood/widgets/notification.py`
+- Modify: `freefood/widgets/__init__.py`
+- Modify: `freefood/screens/feed.py`
+- Modify: `freefood/api.py`
+- Modify: `freefood/models.py`
+
+**Step 1: Add Notification model**
+
+Add to `freefood/models.py`:
+```python
+@dataclass
+class Notification:
+    """A notification event."""
+
+    id: str
+    event_type: str  # "mention_in_post", "mention_in_comment", "subscription_request", etc.
+    created_at: datetime
+    created_by: User | None
+    post_id: str | None = None
+    comment_id: str | None = None
+    post_body: str | None = None
+    comment_body: str | None = None
+```
+
+**Step 2: Add get_notifications to API**
+
+Add to `freefood/api.py`:
+```python
+async def get_notifications(self, offset: int = 0, limit: int = 30) -> list[Notification]:
+    """Fetch notifications."""
+    client = await self._get_client()
+    response = await client.get(
+        "/v2/notifications", params={"offset": offset, "limit": limit}
+    )
+    response.raise_for_status()
+    return self._parse_notifications(response.json())
+
+def _parse_notifications(self, data: dict) -> list[Notification]:
+    """Parse notifications from API response."""
+    users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
+    posts_by_id = {p["id"]: p for p in data.get("posts", [])}
+    comments_by_id = {c["id"]: c for c in data.get("comments", [])}
+
+    notifications = []
+    for n in data.get("notifications", []):
+        post_id = n.get("postId")
+        comment_id = n.get("commentId")
+
+        post_body = None
+        if post_id and post_id in posts_by_id:
+            post_body = posts_by_id[post_id].get("body", "")[:100]
+
+        comment_body = None
+        if comment_id and comment_id in comments_by_id:
+            comment_body = comments_by_id[comment_id].get("body", "")[:100]
+
+        notifications.append(Notification(
+            id=n["id"],
+            event_type=n.get("eventType", "unknown"),
+            created_at=datetime.fromtimestamp(int(n["createdAt"]) / 1000),
+            created_by=users_by_id.get(n.get("createdBy")),
+            post_id=post_id,
+            comment_id=comment_id,
+            post_body=post_body,
+            comment_body=comment_body,
+        ))
+    return notifications
+```
+
+**Step 3: Create NotificationBlock widget**
+
+Create `freefood/widgets/notification.py`:
+```python
+"""Notification block widget."""
+
+from textual.app import ComposeResult
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Static, Button
+
+from freefood.models import Notification
+from freefood.widgets.post import format_time_ago
+
+
+class NotificationBlock(Widget, can_focus=True):
+    """Widget displaying a notification."""
+
+    DEFAULT_CSS = """
+    NotificationBlock {
+        height: auto;
+        border: solid $primary;
+        padding: 1;
+        margin: 1 0;
+    }
+
+    NotificationBlock:focus {
+        border: solid $accent;
+    }
+
+    NotificationBlock .notification-text {
+        margin-bottom: 1;
+    }
+
+    NotificationBlock .notification-meta {
+        color: $text-muted;
+    }
+    """
+
+    class NavigateToPost(Message):
+        """Request to navigate to post."""
+        def __init__(self, post_id: str) -> None:
+            self.post_id = post_id
+            super().__init__()
+
+    class NavigateToUser(Message):
+        """Request to navigate to user."""
+        def __init__(self, username: str) -> None:
+            self.username = username
+            super().__init__()
+
+    def __init__(self, notification: Notification) -> None:
+        super().__init__()
+        self.notification = notification
+
+    def compose(self) -> ComposeResult:
+        n = self.notification
+        author = n.created_by
+
+        # Format based on event type
+        if n.event_type == "mention_in_post":
+            text = f"mentioned you in a post"
+            if n.post_body:
+                text += f": {n.post_body}..."
+        elif n.event_type == "mention_in_comment":
+            text = f"mentioned you in a comment"
+            if n.comment_body:
+                text += f": {n.comment_body}..."
+        elif n.event_type == "direct_message":
+            text = "sent you a direct message"
+        elif n.event_type == "subscription_request":
+            text = "wants to subscribe to you"
+        elif n.event_type == "subscription_approved":
+            text = "approved your subscription request"
+        else:
+            text = n.event_type
+
+        if author:
+            yield Button(f"@{author.username}", id=f"user-{author.username}", classes="username-link")
+            yield Static(f" {text}", classes="notification-text")
+        else:
+            yield Static(text, classes="notification-text")
+
+        yield Static(format_time_ago(n.created_at), classes="notification-meta")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id or ""
+        if button_id.startswith("user-"):
+            username = button_id.replace("user-", "")
+            self.post_message(self.NavigateToUser(username))
+```
+
+**Step 4: Update widgets init**
+
+```python
+from .notification import NotificationBlock
+
+__all__ = ["MenuBar", "PostBlock", "ComposeBlock", "InlineEditor", "SearchInput", "NotificationBlock"]
+```
+
+**Step 5: Update FeedScreen for notifications**
+
+```python
+from freefood.widgets.notification import NotificationBlock
+from freefood.models import Notification
+
+# Add to class:
+self.notifications: list[Notification] = []
+
+# In refresh_content:
+elif self.state.current_view == View.NOTIFICATIONS:
+    self.notifications = await api.get_notifications()
+    self.posts = []  # Clear posts
+
+# In rendering section:
+if self.state.current_view == View.NOTIFICATIONS:
+    if not self.notifications:
+        container.mount(Static("No notifications", classes="loading"))
+    else:
+        for n in self.notifications:
+            container.mount(NotificationBlock(n))
+elif not self.posts:
+    # ... existing empty state handling
+```
+
+**Step 6: Commit**
+
+```bash
+git add freefood/models.py freefood/api.py freefood/widgets/notification.py freefood/widgets/__init__.py freefood/screens/feed.py
+git commit -m "feat: add notifications view
+
+- Notification model and API method
+- NotificationBlock widget with event formatting
+- Clickable usernames in notifications"
+```
+
+---
+
+## Task 23: Polish & Error Handling
+
+**Files:**
+- Various files for cleanup
+
+**Step 1: Review and fix edge cases**
+
+Check for:
+- Empty username handling
+- Network timeout handling
+- Very long post bodies
+- Unicode/emoji in content
+
+**Step 2: Improve error messages**
+
+Replace generic "Failed" messages with specific ones:
+- "Network error: could not connect"
+- "Post not found"
+- "You don't have permission to..."
+
+**Step 3: Add loading indicators**
+
+Replace "Loading..." text with animated spinner where appropriate.
+
+**Step 4: Test on all platforms**
+
+- Linux: Full test
+- macOS: Full test
+- Windows: Full test (check path separators, terminal compatibility)
+
+**Step 5: Final cleanup**
+
+- Remove debug print statements
+- Remove unused imports
+- Add missing docstrings
+- Run linter
+
+**Step 6: Commit**
+
+```bash
+git add -A
+git commit -m "chore: polish and error handling
+
+- Improved error messages
+- Edge case handling
+- Cross-platform testing complete"
+```
 
 ---
 
