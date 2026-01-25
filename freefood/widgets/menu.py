@@ -12,6 +12,11 @@ from freefood.models import View
 class MenuBar(Widget):
     """Top navigation menu bar."""
 
+    BINDINGS = [
+        ("left", "focus_previous", "Previous"),
+        ("right", "focus_next", "Next"),
+    ]
+
     DEFAULT_CSS = """
     MenuBar {
         dock: top;
@@ -107,3 +112,21 @@ class MenuBar(Widget):
         """Set current view externally."""
         self.current_view = view
         self._update_selection()
+
+    def action_focus_previous(self) -> None:
+        """Focus previous button."""
+        buttons = list(self.query(Button))
+        focused = self.app.focused
+        if focused in buttons:
+            idx = buttons.index(focused)
+            if idx > 0:
+                buttons[idx - 1].focus()
+
+    def action_focus_next(self) -> None:
+        """Focus next button."""
+        buttons = list(self.query(Button))
+        focused = self.app.focused
+        if focused in buttons:
+            idx = buttons.index(focused)
+            if idx < len(buttons) - 1:
+                buttons[idx + 1].focus()
