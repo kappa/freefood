@@ -1,9 +1,12 @@
 """Entry point for freefood console client."""
 
+from freefood.app import FreeFoodApp
+
 
 def main() -> None:
     """Run the FreeFood application."""
-    print("FreeFood starting...")
+    app = FreeFoodApp()
+    app.run()
 
 
 if __name__ == "__main__":
