@@ -501,3 +501,134 @@ class TestPostBlockOnButtonPressed:
 
         # Verify body_expanded is now True
         assert widget.body_expanded is True
+
+    def test_btn_like_emits_like_requested(self):
+        """on_button_pressed should emit LikeRequested when btn-like pressed."""
+        from unittest.mock import Mock, patch
+
+        from textual.widgets import Button
+
+        post = make_post()
+        widget = PostBlock(post)
+
+        # Create a mock button pressed event
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-like"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        # Patch post_message to capture the message
+        with patch.object(widget, "post_message") as mock_post_message:
+            widget.on_button_pressed(mock_event)
+
+        # Verify LikeRequested was posted with the correct post
+        mock_post_message.assert_called_once()
+        msg = mock_post_message.call_args[0][0]
+        assert isinstance(msg, PostBlock.LikeRequested)
+        assert msg.post is post
+
+    def test_btn_hide_emits_hide_requested(self):
+        """on_button_pressed should emit HideRequested when btn-hide pressed."""
+        from unittest.mock import Mock, patch
+
+        from textual.widgets import Button
+
+        post = make_post()
+        widget = PostBlock(post)
+
+        # Create a mock button pressed event
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-hide"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        # Patch post_message to capture the message
+        with patch.object(widget, "post_message") as mock_post_message:
+            widget.on_button_pressed(mock_event)
+
+        # Verify HideRequested was posted with the correct post
+        mock_post_message.assert_called_once()
+        msg = mock_post_message.call_args[0][0]
+        assert isinstance(msg, PostBlock.HideRequested)
+        assert msg.post is post
+
+
+class TestPostBlockLikeButtonLabel:
+    """Tests for Like button label based on is_liked state."""
+
+    @pytest.mark.asyncio
+    async def test_like_button_shows_like_when_not_liked(self):
+        """Like button should show 'Like' when post is not liked."""
+        from textual.app import App
+
+        post = make_post(is_liked=False)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_like = app.query_one("#btn-like")
+            # Button label should contain "Like" but not "Unlike"
+            label_text = btn_like.label.plain
+            assert "Like" in label_text
+            assert "Unlike" not in label_text
+
+    @pytest.mark.asyncio
+    async def test_like_button_shows_unlike_when_liked(self):
+        """Like button should show 'Unlike' when post is liked."""
+        from textual.app import App
+
+        post = make_post(is_liked=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_like = app.query_one("#btn-like")
+            # Button label should contain "Unlike"
+            label_text = btn_like.label.plain
+            assert "Unlike" in label_text
+
+
+class TestPostBlockHideButtonLabel:
+    """Tests for Hide button label based on is_hidden state."""
+
+    @pytest.mark.asyncio
+    async def test_hide_button_shows_hide_when_not_hidden(self):
+        """Hide button should show 'Hide' when post is not hidden."""
+        from textual.app import App
+
+        post = make_post(is_hidden=False)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_hide = app.query_one("#btn-hide")
+            # Button label should be "Hide" exactly
+            label_text = btn_hide.label.plain
+            assert label_text == "Hide"
+
+    @pytest.mark.asyncio
+    async def test_hide_button_shows_unhide_when_hidden(self):
+        """Hide button should show 'Unhide' when post is hidden."""
+        from textual.app import App
+
+        post = make_post(is_hidden=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_hide = app.query_one("#btn-hide")
+            # Button label should be "Unhide" exactly
+            label_text = btn_hide.label.plain
+            assert label_text == "Unhide"
