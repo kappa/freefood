@@ -34,6 +34,7 @@ class PostBlock(Widget, can_focus=True):
     """Widget displaying a single post."""
 
     BINDINGS = [
+        ("enter", "enter_post_mode", "Enter post"),
         ("up", "focus_previous", "Previous"),
         ("down", "focus_next", "Next"),
         ("escape", "exit_post_mode", "Back to feed"),
@@ -53,6 +54,10 @@ class PostBlock(Widget, can_focus=True):
 
     PostBlock:focus {
         border: solid $accent;
+    }
+
+    PostBlock.post-mode {
+        border: double $accent;
     }
 
     PostBlock .post-header {
@@ -146,6 +151,7 @@ class PostBlock(Widget, can_focus=True):
         self.post = post
         self.body_expanded = False
         self.comments_expanded = False
+        self.post_mode = False  # When True, buttons are focusable
 
     def compose(self) -> ComposeResult:
         """Create post widgets."""
@@ -156,19 +162,31 @@ class PostBlock(Widget, can_focus=True):
             # Body
             yield Static(self._format_body(), classes="post-body")
             if self._body_is_truncated():
-                yield Button("Show more...", id="show-more-body", classes="show-more")
+                btn = Button("Show more...", id="show-more-body", classes="show-more")
+                btn.can_focus = self.post_mode
+                yield btn
 
             # Meta line with action buttons
             with Horizontal(classes="post-actions"):
                 yield Static(format_time_ago(self.post.created_at), classes="post-meta")
-                yield Button("Comment", id="btn-comment")
+                btn_comment = Button("Comment", id="btn-comment")
+                btn_comment.can_focus = self.post_mode
+                yield btn_comment
                 like_label = "Unlike" if self.post.is_liked else "Like"
-                yield Button(f"♥ {like_label}", id="btn-like")
+                btn_like = Button(f"♥ {like_label}", id="btn-like")
+                btn_like.can_focus = self.post_mode
+                yield btn_like
                 hide_label = "Unhide" if self.post.is_hidden else "Hide"
-                yield Button(hide_label, id="btn-hide")
+                btn_hide = Button(hide_label, id="btn-hide")
+                btn_hide.can_focus = self.post_mode
+                yield btn_hide
                 if self.post.is_own:
-                    yield Button("Edit", id="btn-edit")
-                    yield Button("Delete", id="btn-delete")
+                    btn_edit = Button("Edit", id="btn-edit")
+                    btn_edit.can_focus = self.post_mode
+                    yield btn_edit
+                    btn_delete = Button("Delete", id="btn-delete")
+                    btn_delete.can_focus = self.post_mode
+                    yield btn_delete
 
             # Likes
             if self.post.likes:
@@ -263,14 +281,75 @@ class PostBlock(Widget, can_focus=True):
         elif event.button.id == "btn-hide":
             self.post_message(self.HideRequested(self.post))
 
+    def action_enter_post_mode(self) -> None:
+        """Enter post mode, making buttons focusable."""
+        self.post_mode = True
+        self.add_class("post-mode")
+        self.refresh(recompose=True)
+        # Focus first button after recompose
+        self.call_after_refresh(self._focus_first_button)
+
+    def _focus_first_button(self) -> None:
+        """Focus the first button in this post."""
+        buttons = list(self.query(Button))
+        if buttons:
+            buttons[0].focus()
+
     def action_focus_previous(self) -> None:
-        """Focus previous focusable element."""
-        self.screen.focus_previous()
+        """Focus previous post (when PostBlock has focus)."""
+        # Find previous PostBlock sibling
+        posts = list(self.screen.query(PostBlock))
+        try:
+            idx = posts.index(self)
+            if idx > 0:
+                posts[idx - 1].focus()
+        except (ValueError, IndexError):
+            pass
 
     def action_focus_next(self) -> None:
-        """Focus next focusable element."""
-        self.screen.focus_next()
+        """Focus next post (when PostBlock has focus)."""
+        # Find next PostBlock sibling
+        posts = list(self.screen.query(PostBlock))
+        try:
+            idx = posts.index(self)
+            if idx < len(posts) - 1:
+                posts[idx + 1].focus()
+        except (ValueError, IndexError):
+            pass
 
     def action_exit_post_mode(self) -> None:
         """Exit post mode, return focus to this post block."""
+        self.post_mode = False
+        self.remove_class("post-mode")
+        self.refresh(recompose=True)
         self.focus()
+
+    def on_key(self, event) -> None:
+        """Handle key events for post mode navigation."""
+        if not self.post_mode:
+            return
+        # When in post mode and a child button has focus, handle navigation
+        focused = self.screen.focused
+        if focused is None or focused is self:
+            return
+        # Check if focused widget is inside this PostBlock
+        if not self.is_ancestor_of(focused):
+            return
+        if event.key == "up":
+            self.screen.focus_previous()
+            event.stop()
+        elif event.key == "down":
+            self.screen.focus_next()
+            event.stop()
+        elif event.key == "escape":
+            self.action_exit_post_mode()
+            event.stop()
+
+    def is_ancestor_of(self, widget) -> bool:
+        """Check if this widget is an ancestor of the given widget."""
+        parent = widget.parent
+        while parent is not None:
+            if parent is self:
+                return True
+            parent = parent.parent
+        return False
