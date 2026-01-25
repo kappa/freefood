@@ -40,11 +40,6 @@ class AuthScreen(Screen):
         margin: 1 0;
     }
 
-    #auth-buttons {
-        align: center middle;
-        height: 3;
-    }
-
     Button {
         margin: 0 1;
     }
