@@ -341,6 +341,74 @@ async def test_get_post():
 
 
 @pytest.mark.asyncio
+async def test_get_post_single_object_response():
+    """get_post should handle API response where posts is a single dict, not a list.
+
+    The FreeFeed API returns posts as a dict (single object) for single-post endpoints,
+    not as a list like timeline endpoints do.
+    """
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    # Real API response structure for single post - posts is a DICT not a list
+    mock_response = {
+        "posts": {
+            "id": "post-456",
+            "body": "Single post from real API",
+            "createdBy": "u1",
+            "createdAt": "1706097600000",
+            "updatedAt": "1706097600000",
+            "comments": ["c1", "c2"],
+            "likes": ["u2"],
+            "postedTo": ["feed-1"],
+            "omittedComments": 0,
+            "omittedLikes": 0,
+        },
+        "comments": [
+            {
+                "id": "c1",
+                "body": "First comment",
+                "createdBy": "u2",
+                "createdAt": "1706097700000",
+                "likes": 2,
+            },
+            {
+                "id": "c2",
+                "body": "Second comment",
+                "createdBy": "u1",
+                "createdAt": "1706097800000",
+                "likes": 0,
+            },
+        ],
+        "users": [
+            {"id": "u1", "username": "alice", "screenName": "Alice", "type": "user"},
+            {"id": "u2", "username": "bob", "screenName": "Bob", "type": "user"},
+            {"id": "feed-1", "username": "news", "screenName": "News", "type": "group"},
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        post = await api.get_post("post-456")
+
+        assert post is not None
+        assert post.id == "post-456"
+        assert post.body == "Single post from real API"
+        assert post.author.username == "alice"
+        assert len(post.comments) == 2
+        assert post.comments[0].body == "First comment"
+        assert post.comments[1].body == "Second comment"
+        assert len(post.groups) == 1
+        assert post.groups[0].username == "news"
+
+
+@pytest.mark.asyncio
 async def test_get_post_not_found():
     """get_post should return None when no posts are in response."""
     api = FreeFeedAPI("test-token")

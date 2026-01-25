@@ -79,8 +79,13 @@ class FreeFeedAPI:
             for c in data.get("comments", [])
         }
 
+        # Handle both list (timelines) and dict (single post) response formats
+        posts_data = data.get("posts", [])
+        if isinstance(posts_data, dict):
+            posts_data = [posts_data]
+
         posts = []
-        for p in data.get("posts", []):
+        for p in posts_data:
             author = users_by_id.get(p["createdBy"])
             post_comments = [
                 comments_by_id[cid]
