@@ -64,8 +64,8 @@ class MenuBar(Widget):
     def compose(self) -> ComposeResult:
         """Create menu buttons."""
         with Horizontal():
-            yield Button("← Back", id="back-button", variant="default")
-            yield Button("Home", id="home-button", variant="primary")
+            yield Button("← Back", id="back-button")
+            yield Button("Home", id="home-button")
             yield Button("Notifications", id="notifications-button")
             yield Button("Directs", id="directs-button")
             yield Button("Search", id="search-button")
@@ -112,6 +112,17 @@ class MenuBar(Widget):
         """Set current view externally."""
         self.current_view = view
         self._update_selection()
+
+    def focus_current_view_button(self) -> None:
+        """Focus the button for the current view."""
+        view_to_button = {
+            View.HOME: "home-button",
+            View.NOTIFICATIONS: "notifications-button",
+            View.DIRECTS: "directs-button",
+            View.SEARCH: "search-button",
+        }
+        button_id = view_to_button.get(self.current_view, "home-button")
+        self.query_one(f"#{button_id}", Button).focus()
 
     def action_focus_previous(self) -> None:
         """Focus previous button."""
