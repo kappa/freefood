@@ -230,12 +230,20 @@ class PostBlock(Widget, can_focus=True):
     def _render_comments(self):
         """Render comments section."""
         comments = self.post.comments
-        total = len(comments) + self.post.omitted_comments
+        omitted = self.post.omitted_comments
+        total = len(comments) + omitted
 
         if total == 0:
             return
 
-        # Show first 2 and last 2
+        # If there are omitted comments, show indicator at top
+        if omitted > 0 and not self.comments_expanded:
+            yield Static(
+                f"── {omitted} earlier comments ──",
+                classes="more-comments",
+            )
+
+        # Show first 2 and last 2 if we have many local comments
         if len(comments) <= 4 or self.comments_expanded:
             for comment in comments:
                 yield self._render_comment(comment)
@@ -245,7 +253,7 @@ class PostBlock(Widget, can_focus=True):
                 yield self._render_comment(comment)
 
             # Middle expander
-            middle_count = total - 4
+            middle_count = len(comments) - 4
             yield Static(
                 f"── {middle_count} more comments ──",
                 classes="more-comments",
