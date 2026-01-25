@@ -363,3 +363,79 @@ async def test_get_post_not_found():
         post = await api.get_post("nonexistent-id")
 
         assert post is None
+
+
+@pytest.mark.asyncio
+async def test_like_post():
+    """like_post should POST to correct endpoint."""
+    api = FreeFeedAPI("test-token")
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        await api.like_post("post-123")
+
+        mock_client.post.assert_called_once_with("/v2/posts/post-123/like")
+
+
+@pytest.mark.asyncio
+async def test_unlike_post():
+    """unlike_post should POST to correct endpoint."""
+    api = FreeFeedAPI("test-token")
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        await api.unlike_post("post-123")
+
+        mock_client.post.assert_called_once_with("/v2/posts/post-123/unlike")
+
+
+@pytest.mark.asyncio
+async def test_create_post():
+    """create_post should POST with correct body."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [
+            {
+                "id": "new-post",
+                "body": "Hello!",
+                "createdBy": "me",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": [],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "users": [{"id": "me", "username": "me", "screenName": "Me", "type": "user"}],
+        "comments": [],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        post = await api.create_post("Hello!", ["news"])
+
+        assert post.body == "Hello!"
+        mock_client.post.assert_called_once_with(
+            "/v2/posts",
+            json={"post": {"body": "Hello!"}, "meta": {"feeds": ["news"]}},
+        )

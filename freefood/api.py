@@ -167,3 +167,106 @@ class FreeFeedAPI:
         response.raise_for_status()
         posts = self._denormalize_posts(response.json())
         return posts[0] if posts else None
+
+    # Post actions
+    async def like_post(self, post_id: str) -> None:
+        """Like a post."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/posts/{post_id}/like")
+        response.raise_for_status()
+
+    async def unlike_post(self, post_id: str) -> None:
+        """Unlike a post."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/posts/{post_id}/unlike")
+        response.raise_for_status()
+
+    async def hide_post(self, post_id: str) -> None:
+        """Hide a post."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/posts/{post_id}/hide")
+        response.raise_for_status()
+
+    async def unhide_post(self, post_id: str) -> None:
+        """Unhide a post."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/posts/{post_id}/unhide")
+        response.raise_for_status()
+
+    async def create_post(self, body: str, feeds: list[str]) -> Post:
+        """Create a new post."""
+        client = await self._get_client()
+        response = await client.post(
+            "/v2/posts", json={"post": {"body": body}, "meta": {"feeds": feeds}}
+        )
+        response.raise_for_status()
+        posts = self._denormalize_posts(response.json())
+        return posts[0]
+
+    async def update_post(self, post_id: str, body: str) -> Post:
+        """Update a post."""
+        client = await self._get_client()
+        response = await client.put(
+            f"/v2/posts/{post_id}", json={"post": {"body": body}}
+        )
+        response.raise_for_status()
+        posts = self._denormalize_posts(response.json())
+        return posts[0]
+
+    async def delete_post(self, post_id: str) -> None:
+        """Delete a post."""
+        client = await self._get_client()
+        response = await client.delete(f"/v2/posts/{post_id}")
+        response.raise_for_status()
+
+    # Comment actions
+    async def create_comment(self, post_id: str, body: str) -> Comment:
+        """Create a comment on a post."""
+        client = await self._get_client()
+        response = await client.post(
+            "/v2/comments", json={"comment": {"body": body, "postId": post_id}}
+        )
+        response.raise_for_status()
+        data = response.json()
+        # Comment response includes users array
+        users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
+        return self._parse_comment(data["comments"], users_by_id)
+
+    async def update_comment(self, comment_id: str, body: str) -> None:
+        """Update a comment."""
+        client = await self._get_client()
+        response = await client.put(
+            f"/v2/comments/{comment_id}", json={"comment": {"body": body}}
+        )
+        response.raise_for_status()
+
+    async def delete_comment(self, comment_id: str) -> None:
+        """Delete a comment."""
+        client = await self._get_client()
+        response = await client.delete(f"/v2/comments/{comment_id}")
+        response.raise_for_status()
+
+    async def like_comment(self, comment_id: str) -> None:
+        """Like a comment."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/comments/{comment_id}/like")
+        response.raise_for_status()
+
+    async def unlike_comment(self, comment_id: str) -> None:
+        """Unlike a comment."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/comments/{comment_id}/unlike")
+        response.raise_for_status()
+
+    # Subscription actions
+    async def subscribe(self, username: str) -> None:
+        """Subscribe to a user."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/users/{username}/subscribe")
+        response.raise_for_status()
+
+    async def unsubscribe(self, username: str) -> None:
+        """Unsubscribe from a user."""
+        client = await self._get_client()
+        response = await client.post(f"/v2/users/{username}/unsubscribe")
+        response.raise_for_status()
