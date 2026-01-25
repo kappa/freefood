@@ -6,6 +6,7 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from freefood.models import View, Post
+from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
@@ -30,15 +31,22 @@ class FeedScreen(Screen):
     }
     """
 
-    def __init__(self, view: View = View.HOME) -> None:
+    def __init__(self, state: AppState | None = None) -> None:
         """Initialize feed screen."""
         super().__init__()
-        self.current_view = view
+        self._state = state  # Will use app.state if None
         self.posts: list[Post] = []
+
+    @property
+    def state(self) -> AppState:
+        """Get app state."""
+        if self._state is not None:
+            return self._state
+        return self.app.state
 
     def compose(self) -> ComposeResult:
         """Create feed screen widgets."""
-        yield MenuBar(self.current_view)
+        yield MenuBar(self.state.current_view)
         with ScrollableContainer(id="feed-container"):
             yield Static("Loading feed...", classes="loading")
 
@@ -57,10 +65,15 @@ class FeedScreen(Screen):
             if api is None:
                 raise Exception("Not connected")
 
-            if self.current_view == View.HOME:
+            if self.state.current_view == View.HOME:
                 self.posts = await api.get_home_feed()
-            elif self.current_view == View.DIRECTS:
+            elif self.state.current_view == View.DIRECTS:
                 self.posts = await api.get_directs()
+            elif self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
+                if self.state.current_target:
+                    self.posts = await api.get_user_feed(self.state.current_target)
+                else:
+                    self.posts = []
             else:
                 self.posts = []
 
@@ -100,9 +113,23 @@ class FeedScreen(Screen):
 
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
         """Handle view change from menu."""
-        self.current_view = message.view
+        if message.view != self.state.current_view:
+            self.state.navigate_to(message.view)
+            menu = self.query_one(MenuBar)
+            menu.set_view(message.view)
         self.run_worker(self.refresh_content())
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
         """Handle back request."""
-        self.notify("Back not yet implemented")
+        entry = self.state.pop_history()
+        if entry:
+            self.state.current_view = entry.view
+            self.state.current_target = entry.target
+            if entry.query:
+                self.state.search_query = entry.query
+            menu = self.query_one(MenuBar)
+            menu.set_view(entry.view)
+            self.run_worker(self.refresh_content())
+            # TODO: Restore scroll_position after content loads
+        else:
+            self.notify("No history")

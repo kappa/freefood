@@ -8,6 +8,7 @@ from freefood.api import FreeFeedAPI
 from freefood.config import get_token, save_token
 from freefood.screens.auth import AuthScreen
 from freefood.screens.feed import FeedScreen
+from freefood.state import AppState
 
 
 class FreeFoodApp(App):
@@ -24,6 +25,7 @@ class FreeFoodApp(App):
         """Initialize app."""
         super().__init__()
         self.api: FreeFeedAPI | None = None
+        self.state = AppState()
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
