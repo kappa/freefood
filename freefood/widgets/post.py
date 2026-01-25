@@ -30,14 +30,53 @@ def format_time_ago(dt: datetime) -> str:
         return f"{days}d ago"
 
 
+class CommentBlock(Widget):
+    """Widget displaying a single comment. Focusable in post mode."""
+
+    DEFAULT_CSS = """
+    CommentBlock {
+        margin-top: 1;
+        padding-left: 2;
+        border-left: solid $primary;
+        height: auto;
+    }
+
+    CommentBlock:focus {
+        background: $surface-lighten-2;
+        border-left: solid $accent;
+    }
+    """
+
+    MAX_COMMENT_LINES = 10
+
+    def __init__(self, comment: Comment, post_mode: bool = False) -> None:
+        """Initialize comment widget."""
+        super().__init__()
+        self.comment = comment
+        self.can_focus = post_mode
+
+    def compose(self) -> ComposeResult:
+        """Create comment widgets."""
+        lines = self.comment.body.split("\n")
+        if len(lines) > self.MAX_COMMENT_LINES:
+            body = "\n".join(lines[: self.MAX_COMMENT_LINES]) + "\n[show more...]"
+        else:
+            body = self.comment.body
+
+        likes_str = f"[{self.comment.likes}♥]" if self.comment.likes else "[0♥]"
+        author_name = self.comment.author.username if self.comment.author else "unknown"
+        text = f"{likes_str} {body} -- @{author_name}"
+        yield Static(text)
+
+
 class PostBlock(Widget, can_focus=True):
     """Widget displaying a single post."""
 
     BINDINGS = [
         ("enter", "enter_post_mode", "Enter post"),
-        ("up", "focus_previous", "Previous"),
-        ("down", "focus_next", "Next"),
-        # Note: escape is handled by on_key when in post_mode
+        # Note: up/down removed - they should scroll the feed, not change selection
+        # Tab/Shift-Tab move between posts
+        # Escape is handled by on_key when in post_mode
         # When not in post_mode, escape bubbles to FeedScreen to focus menu
     ]
 
@@ -79,20 +118,13 @@ class PostBlock(Widget, can_focus=True):
         margin-top: 1;
     }
 
-    PostBlock .comment {
-        margin-top: 1;
-        padding-left: 2;
-        border-left: solid $primary;
-    }
-
-    PostBlock .comment-likes {
-        color: $error;
-    }
-
     PostBlock .more-comments {
         text-align: center;
         color: $text-muted;
         margin: 1 0;
+        height: 1;
+        border: none;
+        width: 100%;
     }
 
     PostBlock .post-actions {
@@ -241,52 +273,45 @@ class PostBlock(Widget, can_focus=True):
         if total == 0:
             return
 
-        # If there are omitted comments, show indicator at top
+        # If there are omitted comments, show indicator at top (as focusable button)
         if omitted > 0 and not self.comments_expanded:
-            yield Static(
+            btn = Button(
                 f"── {omitted} earlier comments ──",
+                id="btn-more-comments",
                 classes="more-comments",
             )
+            btn.can_focus = self.post_mode
+            yield btn
 
         # Show first 2 and last 2 if we have many local comments
         if len(comments) <= 4 or self.comments_expanded:
             for comment in comments:
-                yield self._render_comment(comment)
+                yield CommentBlock(comment, post_mode=self.post_mode)
         else:
             # First 2
             for comment in comments[:2]:
-                yield self._render_comment(comment)
+                yield CommentBlock(comment, post_mode=self.post_mode)
 
-            # Middle expander
+            # Middle expander (as focusable button)
             middle_count = len(comments) - 4
-            yield Static(
+            btn = Button(
                 f"── {middle_count} more comments ──",
+                id="btn-middle-comments",
                 classes="more-comments",
             )
+            btn.can_focus = self.post_mode
+            yield btn
 
             # Last 2
             for comment in comments[-2:]:
-                yield self._render_comment(comment)
-
-    def _render_comment(self, comment: Comment) -> Static:
-        """Render a single comment."""
-        lines = comment.body.split("\n")
-        if len(lines) > self.MAX_COMMENT_LINES:
-            body = "\n".join(lines[: self.MAX_COMMENT_LINES]) + "\n[show more...]"
-        else:
-            body = comment.body
-
-        likes_str = f"[{comment.likes}♥]" if comment.likes else "[0♥]"
-        author_name = comment.author.username if comment.author else "unknown"
-        text = f"{likes_str} {body} -- @{author_name}"
-        return Static(text, classes="comment")
+                yield CommentBlock(comment, post_mode=self.post_mode)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "show-more-body":
             self.body_expanded = True
             self.refresh(recompose=True)
-        elif event.button.id == "show-more-comments":
+        elif event.button.id in ("btn-more-comments", "btn-middle-comments"):
             self.comments_expanded = True
             self.post_message(self.ExpandComments(self.post))
         elif event.button.id == "btn-like":
@@ -308,28 +333,6 @@ class PostBlock(Widget, can_focus=True):
         if buttons:
             buttons[0].focus()
 
-    def action_focus_previous(self) -> None:
-        """Focus previous post (when PostBlock has focus)."""
-        # Find previous PostBlock sibling
-        posts = list(self.screen.query(PostBlock))
-        try:
-            idx = posts.index(self)
-            if idx > 0:
-                posts[idx - 1].focus()
-        except (ValueError, IndexError):
-            pass
-
-    def action_focus_next(self) -> None:
-        """Focus next post (when PostBlock has focus)."""
-        # Find next PostBlock sibling
-        posts = list(self.screen.query(PostBlock))
-        try:
-            idx = posts.index(self)
-            if idx < len(posts) - 1:
-                posts[idx + 1].focus()
-        except (ValueError, IndexError):
-            pass
-
     def action_exit_post_mode(self) -> None:
         """Exit post mode, return focus to this post block."""
         self.post_mode = False
@@ -348,11 +351,25 @@ class PostBlock(Widget, can_focus=True):
         # Check if focused widget is inside this PostBlock
         if not self.is_ancestor_of(focused):
             return
-        if event.key == "up":
-            self.screen.focus_previous()
+
+        # Get all focusable children within this post
+        focusable = [w for w in self.query("*") if w.can_focus and w is not self]
+
+        if event.key in ("up", "left", "shift+tab"):
+            # Move to previous focusable within this post
+            if focused in focusable:
+                idx = focusable.index(focused)
+                if idx > 0:
+                    focusable[idx - 1].focus()
+                # else: at first element, stay put
             event.stop()
-        elif event.key == "down":
-            self.screen.focus_next()
+        elif event.key in ("down", "right", "tab"):
+            # Move to next focusable within this post
+            if focused in focusable:
+                idx = focusable.index(focused)
+                if idx < len(focusable) - 1:
+                    focusable[idx + 1].focus()
+                # else: at last element, stay put
             event.stop()
         elif event.key == "escape":
             self.action_exit_post_mode()

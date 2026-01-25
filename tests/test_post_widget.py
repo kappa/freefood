@@ -86,36 +86,10 @@ class TestPostBlockBindings:
         assert hasattr(PostBlock, "BINDINGS")
         assert isinstance(PostBlock.BINDINGS, list)
 
-    def test_bindings_contains_up(self):
-        """BINDINGS should contain 'up' binding."""
-        binding_keys = [b[0] for b in PostBlock.BINDINGS]
-        assert "up" in binding_keys
-
-    def test_bindings_contains_down(self):
-        """BINDINGS should contain 'down' binding."""
-        binding_keys = [b[0] for b in PostBlock.BINDINGS]
-        assert "down" in binding_keys
-
     def test_bindings_contains_enter(self):
         """BINDINGS should contain 'enter' binding for post mode."""
         binding_keys = [b[0] for b in PostBlock.BINDINGS]
         assert "enter" in binding_keys
-
-    def test_up_binding_action(self):
-        """Up binding should map to focus_previous action."""
-        for binding in PostBlock.BINDINGS:
-            if binding[0] == "up":
-                assert binding[1] == "focus_previous"
-                return
-        pytest.fail("up binding not found")
-
-    def test_down_binding_action(self):
-        """Down binding should map to focus_next action."""
-        for binding in PostBlock.BINDINGS:
-            if binding[0] == "down":
-                assert binding[1] == "focus_next"
-                return
-        pytest.fail("down binding not found")
 
     def test_on_key_method_exists(self):
         """PostBlock should have on_key method for escape handling in post mode."""
@@ -629,3 +603,444 @@ class TestPostBlockHideButtonLabel:
             # Button label should be "Unhide" exactly
             label_text = btn_hide.label.plain
             assert label_text == "Unhide"
+
+
+def make_comment(
+    id: str = "c1",
+    body: str = "Test comment",
+    author: User | None = None,
+    likes: int = 0,
+) -> Comment:
+    """Create a test comment."""
+    return Comment(
+        id=id,
+        body=body,
+        author=author or make_user(username="commenter"),
+        created_at=datetime.now(),
+        likes=likes,
+    )
+
+
+class TestCommentBlockFocusable:
+    """Tests for focusable comments in post mode."""
+
+    @pytest.mark.asyncio
+    async def test_comments_are_focusable_in_post_mode(self):
+        """Comments should be focusable when in post mode."""
+        from textual.app import App
+
+        comment = make_comment()
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Find comment widgets - they should be focusable
+            from freefood.widgets.post import CommentBlock
+
+            comment_widgets = list(app.query(CommentBlock))
+            assert len(comment_widgets) > 0, "No CommentBlock widgets found"
+
+            # Comments should be focusable in post mode
+            for cw in comment_widgets:
+                assert cw.can_focus is True, "Comment should be focusable in post mode"
+
+    @pytest.mark.asyncio
+    async def test_comments_not_focusable_outside_post_mode(self):
+        """Comments should NOT be focusable when not in post mode."""
+        from textual.app import App
+
+        comment = make_comment()
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # NOT in post mode
+            post_block.focus()
+            await pilot.pause()
+
+            # Comments should not be focusable
+            from freefood.widgets.post import CommentBlock
+
+            comment_widgets = list(app.query(CommentBlock))
+            assert len(comment_widgets) > 0, "No CommentBlock widgets found"
+
+            for cw in comment_widgets:
+                assert cw.can_focus is False, "Comment should not be focusable outside post mode"
+
+    @pytest.mark.asyncio
+    async def test_can_navigate_to_comment_in_post_mode(self):
+        """Should be able to navigate to comments with Tab/arrows in post mode."""
+        from textual.app import App
+
+        comment = make_comment()
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Navigate past buttons to comment
+            # Order should be: Comment btn, Like btn, Hide btn, then CommentBlock(s)
+            await pilot.press("tab")  # Comment -> Like
+            await pilot.press("tab")  # Like -> Hide
+            await pilot.press("tab")  # Hide -> first comment
+            await pilot.pause()
+
+            # Should now be focused on a CommentBlock
+            from freefood.widgets.post import CommentBlock
+
+            focused = app.focused
+            assert isinstance(focused, CommentBlock), f"Expected CommentBlock, got {type(focused)}"
+
+
+class TestMoreCommentsButton:
+    """Tests for 'more comments' button in post mode."""
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_focusable_in_post_mode(self):
+        """More comments button should be focusable when in post mode."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        # Create a post with omitted comments
+        post = make_post(omitted_comments=5)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Find the more-comments button - it should exist and be focusable
+            more_btn = app.query_one("#btn-more-comments", Button)
+            assert more_btn is not None, "More comments button not found"
+            assert more_btn.can_focus is True, "More comments button should be focusable"
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_not_focusable_outside_post_mode(self):
+        """More comments button should NOT be focusable outside post mode."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        # Create a post with omitted comments
+        post = make_post(omitted_comments=5)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # NOT in post mode - just focus the post
+            post_block.focus()
+            await pilot.pause()
+
+            # The more-comments button should exist but not be focusable
+            more_btn = app.query_one("#btn-more-comments", Button)
+            assert more_btn is not None, "More comments button not found"
+            assert more_btn.can_focus is False, "More comments button should not be focusable outside post mode"
+
+    @pytest.mark.asyncio
+    async def test_can_navigate_to_more_comments_button(self):
+        """Should be able to navigate to more comments button in post mode."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        # Create a post with omitted comments
+        post = make_post(omitted_comments=5)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Navigate to more-comments button
+            # Order: Comment btn, Like btn, Hide btn, then more-comments btn
+            await pilot.press("tab")  # Comment -> Like
+            await pilot.press("tab")  # Like -> Hide
+            await pilot.press("tab")  # Hide -> more-comments
+            await pilot.pause()
+
+            # Should be focused on more-comments button
+            focused = app.focused
+            assert focused.id == "btn-more-comments", f"Expected btn-more-comments, got {focused.id}"
+
+    @pytest.mark.asyncio
+    async def test_middle_more_comments_button_focusable(self):
+        """Middle more-comments button (between first/last 2) should be focusable."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        # Create a post with more than 4 comments to show the middle expander
+        comments = [make_comment(id=f"c{i}") for i in range(6)]
+        post = make_post(comments=comments)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Find the middle-more-comments button
+            middle_btn = app.query_one("#btn-middle-comments", Button)
+            assert middle_btn is not None, "Middle more comments button not found"
+            assert middle_btn.can_focus is True, "Middle more comments button should be focusable"
+
+
+class TestPostModeNavigation:
+    """Tests for keyboard navigation within post mode."""
+
+    @pytest.mark.asyncio
+    async def test_tab_stays_within_post_in_post_mode(self):
+        """Tab should not escape post when in post mode."""
+        from textual.app import App
+        from textual.containers import Vertical
+
+        post1 = make_post(id="p1", body="Post 1")
+        post2 = make_post(id="p2", body="Post 2")
+
+        class TestApp(App):
+            def compose(self):
+                with Vertical():
+                    yield PostBlock(post1)
+                    yield PostBlock(post2)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block1 = app.query(PostBlock).first()
+
+            # Enter post mode
+            post_block1.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Focus should now be on first button (Comment)
+            assert app.focused.id == "btn-comment"
+
+            # Press Tab to move to next button
+            await pilot.press("tab")
+            await pilot.pause()
+
+            # Should move to Like button, NOT escape to post2
+            focused = app.focused
+            # Verify focus is still within post_block1
+            assert post_block1.is_ancestor_of(focused), f"Focus escaped to {focused}"
+
+    @pytest.mark.asyncio
+    async def test_shift_tab_stays_within_post_in_post_mode(self):
+        """Shift+Tab should not escape post when in post mode."""
+        from textual.app import App
+        from textual.containers import Vertical
+
+        post1 = make_post(id="p1", body="Post 1")
+        post2 = make_post(id="p2", body="Post 2")
+
+        class TestApp(App):
+            def compose(self):
+                with Vertical():
+                    yield PostBlock(post1)
+                    yield PostBlock(post2)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block1 = app.query(PostBlock).first()
+
+            # Enter post mode
+            post_block1.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Focus should be on first button
+            assert app.focused.id == "btn-comment"
+
+            # Press Shift+Tab - should stay at first button (no previous)
+            await pilot.press("shift+tab")
+            await pilot.pause()
+
+            # Focus should still be within post_block1
+            focused = app.focused
+            assert post_block1.is_ancestor_of(focused), f"Focus escaped to {focused}"
+
+    @pytest.mark.asyncio
+    async def test_left_arrow_navigates_within_post(self):
+        """Left arrow should navigate between focusable elements in post."""
+        from textual.app import App
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Move to second button first
+            await pilot.press("right")
+            await pilot.pause()
+            assert app.focused.id == "btn-like"
+
+            # Now press left to go back
+            await pilot.press("left")
+            await pilot.pause()
+
+            # Should be back at Comment button
+            assert app.focused.id == "btn-comment"
+
+    @pytest.mark.asyncio
+    async def test_right_arrow_navigates_within_post(self):
+        """Right arrow should navigate between focusable elements in post."""
+        from textual.app import App
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should start at Comment button
+            assert app.focused.id == "btn-comment"
+
+            # Press right to move to Like button
+            await pilot.press("right")
+            await pilot.pause()
+
+            # Should be at Like button
+            assert app.focused.id == "btn-like"
+
+    @pytest.mark.asyncio
+    async def test_tab_at_last_element_stays_within_post(self):
+        """Tab at last focusable element should not escape post."""
+        from textual.app import App
+        from textual.containers import Vertical
+
+        post1 = make_post(id="p1", body="Post 1")
+        post2 = make_post(id="p2", body="Post 2")
+
+        class TestApp(App):
+            def compose(self):
+                with Vertical():
+                    yield PostBlock(post1)
+                    yield PostBlock(post2)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block1 = app.query(PostBlock).first()
+
+            # Enter post mode
+            post_block1.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Navigate to last button (Hide)
+            await pilot.press("tab")  # Comment -> Like
+            await pilot.press("tab")  # Like -> Hide
+            await pilot.pause()
+
+            assert app.focused.id == "btn-hide"
+
+            # Press Tab at last element
+            await pilot.press("tab")
+            await pilot.pause()
+
+            # Focus should still be within post_block1 (on Hide button)
+            focused = app.focused
+            assert post_block1.is_ancestor_of(focused), f"Focus escaped to {focused}"
+
+    @pytest.mark.asyncio
+    async def test_up_down_navigate_within_post(self):
+        """Up/Down should navigate between focusable elements in post mode."""
+        from textual.app import App
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Start at Comment button
+            assert app.focused.id == "btn-comment"
+
+            # Down should move to next focusable
+            await pilot.press("down")
+            await pilot.pause()
+            assert app.focused.id == "btn-like"
+
+            # Up should move back
+            await pilot.press("up")
+            await pilot.pause()
+            assert app.focused.id == "btn-comment"
