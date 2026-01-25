@@ -150,3 +150,46 @@ class FeedScreen(Screen):
                         break
         except Exception as e:
             self.notify(f"Failed to load comments: {e}", severity="error")
+
+    async def on_post_block_like_requested(
+        self, message: PostBlock.LikeRequested
+    ) -> None:
+        """Handle like/unlike request."""
+        post = message.post
+        try:
+            if post.is_liked:
+                await self.app.api.unlike_post(post.id)
+                post.is_liked = False
+                self.notify("Unliked")
+            else:
+                await self.app.api.like_post(post.id)
+                post.is_liked = True
+                self.notify("Liked")
+            # Refresh the post block
+            for block in self.query(PostBlock):
+                if block.post.id == post.id:
+                    block.refresh(recompose=True)
+                    break
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    async def on_post_block_hide_requested(
+        self, message: PostBlock.HideRequested
+    ) -> None:
+        """Handle hide/unhide request."""
+        post = message.post
+        try:
+            if post.is_hidden:
+                await self.app.api.unhide_post(post.id)
+                post.is_hidden = False
+                self.notify("Unhidden")
+            else:
+                await self.app.api.hide_post(post.id)
+                post.is_hidden = True
+                self.notify("Hidden")
+            for block in self.query(PostBlock):
+                if block.post.id == post.id:
+                    block.refresh(recompose=True)
+                    break
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")

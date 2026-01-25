@@ -126,6 +126,20 @@ class PostBlock(Widget, can_focus=True):
             self.post = post
             super().__init__()
 
+    class LikeRequested(Message):
+        """Request to like/unlike post."""
+
+        def __init__(self, post: Post) -> None:
+            self.post = post
+            super().__init__()
+
+    class HideRequested(Message):
+        """Request to hide/unhide post."""
+
+        def __init__(self, post: Post) -> None:
+            self.post = post
+            super().__init__()
+
     def __init__(self, post: Post) -> None:
         """Initialize post widget."""
         super().__init__()
@@ -244,6 +258,10 @@ class PostBlock(Widget, can_focus=True):
         elif event.button.id == "show-more-comments":
             self.comments_expanded = True
             self.post_message(self.ExpandComments(self.post))
+        elif event.button.id == "btn-like":
+            self.post_message(self.LikeRequested(self.post))
+        elif event.button.id == "btn-hide":
+            self.post_message(self.HideRequested(self.post))
 
     def action_focus_previous(self) -> None:
         """Focus previous focusable element."""
