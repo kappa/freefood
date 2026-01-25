@@ -3,10 +3,10 @@
 from datetime import datetime
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Static, Button
 
 from freefood.models import Post, Comment
 
@@ -32,6 +32,12 @@ def format_time_ago(dt: datetime) -> str:
 
 class PostBlock(Widget, can_focus=True):
     """Widget displaying a single post."""
+
+    BINDINGS = [
+        ("up", "focus_previous", "Previous"),
+        ("down", "focus_next", "Next"),
+        ("escape", "exit_post_mode", "Back to feed"),
+    ]
 
     DEFAULT_CSS = """
     PostBlock {
@@ -82,6 +88,25 @@ class PostBlock(Widget, can_focus=True):
         color: $text-muted;
         margin: 1 0;
     }
+
+    PostBlock .post-actions {
+        height: auto;
+        margin-top: 1;
+    }
+
+    PostBlock .post-actions Button {
+        min-width: 10;
+        margin-right: 1;
+    }
+
+    PostBlock .show-more {
+        color: $text-muted;
+        margin: 0;
+    }
+
+    PostBlock Button:focus {
+        background: $accent;
+    }
     """
 
     MAX_BODY_LINES = 50
@@ -89,6 +114,13 @@ class PostBlock(Widget, can_focus=True):
 
     class Selected(Message):
         """Message sent when post is selected."""
+
+        def __init__(self, post: Post) -> None:
+            self.post = post
+            super().__init__()
+
+    class ExpandComments(Message):
+        """Request to load all comments for a post."""
 
         def __init__(self, post: Post) -> None:
             self.post = post
@@ -105,24 +137,36 @@ class PostBlock(Widget, can_focus=True):
         """Create post widgets."""
         with Vertical():
             # Header
-            header = self._format_header()
-            yield Static(header, classes="post-header")
+            yield Static(self._format_header(), classes="post-header")
 
             # Body
-            body = self._format_body()
-            yield Static(body, classes="post-body")
+            yield Static(self._format_body(), classes="post-body")
+            if self._body_is_truncated():
+                yield Button("Show more...", id="show-more-body", classes="show-more")
 
-            # Meta (time, actions placeholder)
-            meta = format_time_ago(self.post.created_at)
-            yield Static(meta, classes="post-meta")
+            # Meta line with action buttons
+            with Horizontal(classes="post-actions"):
+                yield Static(format_time_ago(self.post.created_at), classes="post-meta")
+                yield Button("Comment", id="btn-comment")
+                like_label = "Unlike" if self.post.is_liked else "Like"
+                yield Button(f"♥ {like_label}", id="btn-like")
+                hide_label = "Unhide" if self.post.is_hidden else "Hide"
+                yield Button(hide_label, id="btn-hide")
+                if self.post.is_own:
+                    yield Button("Edit", id="btn-edit")
+                    yield Button("Delete", id="btn-delete")
 
             # Likes
             if self.post.likes:
-                likes_text = self._format_likes()
-                yield Static(likes_text, classes="post-likes")
+                yield Static(self._format_likes(), classes="post-likes")
 
             # Comments
             yield from self._render_comments()
+
+    def _body_is_truncated(self) -> bool:
+        """Check if body exceeds max lines."""
+        lines = self.post.body.split("\n")
+        return len(lines) > self.MAX_BODY_LINES and not self.body_expanded
 
     def _format_header(self) -> str:
         """Format post header."""
@@ -191,3 +235,24 @@ class PostBlock(Widget, can_focus=True):
         author_name = comment.author.username if comment.author else "unknown"
         text = f"{likes_str} {body} -- @{author_name}"
         return Static(text, classes="comment")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "show-more-body":
+            self.body_expanded = True
+            self.refresh(recompose=True)
+        elif event.button.id == "show-more-comments":
+            self.comments_expanded = True
+            self.post_message(self.ExpandComments(self.post))
+
+    def action_focus_previous(self) -> None:
+        """Focus previous focusable element."""
+        self.screen.focus_previous()
+
+    def action_focus_next(self) -> None:
+        """Focus next focusable element."""
+        self.screen.focus_next()
+
+    def action_exit_post_mode(self) -> None:
+        """Exit post mode, return focus to this post block."""
+        self.focus()

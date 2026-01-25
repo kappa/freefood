@@ -133,3 +133,20 @@ class FeedScreen(Screen):
             # TODO: Restore scroll_position after content loads
         else:
             self.notify("No history")
+
+    async def on_post_block_expand_comments(
+        self, message: PostBlock.ExpandComments
+    ) -> None:
+        """Load full comments for a post."""
+        try:
+            full_post = await self.app.api.get_post(message.post.id)
+            if full_post:
+                # Find and update the PostBlock
+                for block in self.query(PostBlock):
+                    if block.post.id == message.post.id:
+                        block.post = full_post
+                        block.comments_expanded = True
+                        block.refresh(recompose=True)
+                        break
+        except Exception as e:
+            self.notify(f"Failed to load comments: {e}", severity="error")
