@@ -4,6 +4,7 @@ import webbrowser
 
 from textual.app import ComposeResult
 from textual.containers import Center, Vertical
+from textual.message import Message
 from textual.screen import Screen
 from textual.widgets import Button, Input, Static
 
@@ -85,8 +86,9 @@ class AuthScreen(Screen):
         # Store token and signal app to validate
         self.app.post_message(AuthScreen.TokenSubmitted(token))
 
-    class TokenSubmitted:
+    class TokenSubmitted(Message):
         """Message sent when user submits a token."""
 
         def __init__(self, token: str) -> None:
+            super().__init__()
             self.token = token
