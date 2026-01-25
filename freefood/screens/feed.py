@@ -75,7 +75,8 @@ class FeedScreen(Screen):
             else:
                 for post in self.posts:
                     # Temporary: simple post display
-                    post_text = f"@{post.author.username}:\n{post.body[:200]}..."
+                    author_name = post.author.username if post.author else "unknown"
+                    post_text = f"@{author_name}:\n{post.body[:200]}..."
                     container.mount(Static(post_text, classes="post-placeholder"))
 
         except Exception as e:
