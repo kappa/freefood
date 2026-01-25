@@ -166,9 +166,11 @@ class PostBlock(Widget, can_focus=True):
                 btn.can_focus = self.post_mode
                 yield btn
 
-            # Meta line with action buttons
+            # Timestamp
+            yield Static(format_time_ago(self.post.created_at), classes="post-meta")
+
+            # Action buttons on separate line
             with Horizontal(classes="post-actions"):
-                yield Static(format_time_ago(self.post.created_at), classes="post-meta")
                 btn_comment = Button("Comment", id="btn-comment")
                 btn_comment.can_focus = self.post_mode
                 yield btn_comment
