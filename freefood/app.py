@@ -2,11 +2,12 @@
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Static, Footer
+from textual.widgets import Footer
 
 from freefood.api import FreeFeedAPI
 from freefood.config import get_token, save_token
 from freefood.screens.auth import AuthScreen
+from freefood.screens.feed import FeedScreen
 
 
 class FreeFoodApp(App):
@@ -16,7 +17,6 @@ class FreeFoodApp(App):
     CSS_PATH = "app.tcss"
 
     BINDINGS = [
-        Binding("f5", "refresh", "Refresh"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -27,7 +27,6 @@ class FreeFoodApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Static("FreeFood - Loading...", id="content")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -44,8 +43,7 @@ class FreeFoodApp(App):
         try:
             user = await self.api.validate_token()
             save_token(token, user.username)
-            content = self.query_one("#content", Static)
-            content.update(f"Connected as @{user.username}")
+            self.push_screen(FeedScreen())
             self.notify(f"Welcome, {user.screen_name}!")
         except Exception as e:
             self.api = None
@@ -58,7 +56,3 @@ class FreeFoodApp(App):
         """Handle token submission from auth screen."""
         self.pop_screen()
         await self._try_connect(message.token)
-
-    def action_refresh(self) -> None:
-        """Refresh current view."""
-        self.notify("Refreshing...")
