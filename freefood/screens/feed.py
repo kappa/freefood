@@ -79,7 +79,11 @@ class FeedScreen(Screen):
 
     def action_focus_menu(self) -> None:
         """Focus the menu bar."""
-        self.query_one(MenuBar).focus()
+        # Focus the first button in the menu bar
+        menu = self.query_one(MenuBar)
+        first_button = menu.query("Button").first()
+        if first_button:
+            first_button.focus()
 
     def action_refresh(self) -> None:
         """Refresh feed."""

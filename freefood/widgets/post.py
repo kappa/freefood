@@ -41,6 +41,10 @@ class PostBlock(Widget, can_focus=True):
         height: auto;
     }
 
+    PostBlock > Vertical {
+        height: auto;
+    }
+
     PostBlock:focus {
         border: solid $accent;
     }
