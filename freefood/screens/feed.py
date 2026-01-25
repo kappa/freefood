@@ -15,6 +15,7 @@ class FeedScreen(Screen):
 
     BINDINGS = [
         ("escape", "focus_menu", "Menu"),
+        ("enter", "focus_feed", "Feed"),
         ("f5", "refresh", "Refresh"),
     ]
 
@@ -70,6 +71,10 @@ class FeedScreen(Screen):
             else:
                 for post in self.posts:
                     container.mount(PostBlock(post))
+                # Focus first post so user can scroll with keyboard
+                first_post = container.query(PostBlock).first()
+                if first_post:
+                    first_post.focus()
 
         except Exception as e:
             container.remove_children()
@@ -84,6 +89,13 @@ class FeedScreen(Screen):
         first_button = menu.query("Button").first()
         if first_button:
             first_button.focus()
+
+    def action_focus_feed(self) -> None:
+        """Focus the feed (first post)."""
+        container = self.query_one("#feed-container")
+        first_post = container.query(PostBlock).first()
+        if first_post:
+            first_post.focus()
 
     def action_refresh(self) -> None:
         """Refresh feed."""
