@@ -410,7 +410,26 @@ API returns normalized data with separate arrays for posts, comments, users. The
 - `comment.createdBy` → user object
 - `post.postedTo` → feed/group objects
 
-**Note:** API documentation is unofficial/discovered. Verify during implementation and update `docs/freefeed-api.md` with corrections.
+### Response Format Variations
+
+**Important:** The structure of `posts` in API responses varies by endpoint:
+
+| Endpoint Type | `posts` field type |
+|---------------|-------------------|
+| Timeline endpoints (`/v2/timelines/*`, `/v2/search`) | **List** of post objects |
+| Single post endpoint (`/v2/posts/{id}`) | **Single dict** (not a list) |
+| `/v2/users/whoami` | `users` is a **single dict** (not a list) |
+
+Example: For `/v2/posts/{id}`:
+```json
+{
+  "posts": {"id": "abc", "body": "...", ...},  // dict, NOT a list
+  "comments": [...],
+  "users": [...]
+}
+```
+
+**Note:** API documentation is unofficial/discovered. Verify during implementation and update this document with corrections.
 
 ---
 
