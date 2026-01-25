@@ -1,10 +1,8 @@
 """FreeFeed API client."""
 
-from datetime import datetime
-
 import httpx
 
-from .models import User, Comment, Post
+from .models import User
 
 
 class FreeFeedAPI:
