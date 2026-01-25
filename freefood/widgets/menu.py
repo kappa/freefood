@@ -20,21 +20,19 @@ class MenuBar(Widget):
     DEFAULT_CSS = """
     MenuBar {
         dock: top;
-        height: 1;
+        height: auto;
         background: $primary;
-        padding: 0 1;
     }
 
     MenuBar Horizontal {
-        height: 100%;
-        align: left middle;
+        height: auto;
     }
 
-    MenuBar Button {
+    MenuBar > Horizontal > Button {
+        border: none !important;
         height: 1;
-        border: none;
         margin: 0 1 0 0;
-        min-width: 12;
+        min-width: 10;
     }
 
     MenuBar Button.selected {
