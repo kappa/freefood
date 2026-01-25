@@ -100,7 +100,9 @@ class PostBlock(Widget, can_focus=True):
     }
 
     PostBlock .post-actions Button {
-        min-width: 10;
+        min-width: 8;
+        height: 1;
+        border: none;
         margin-right: 1;
     }
 

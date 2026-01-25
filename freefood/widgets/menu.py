@@ -20,7 +20,7 @@ class MenuBar(Widget):
     DEFAULT_CSS = """
     MenuBar {
         dock: top;
-        height: 3;
+        height: 1;
         background: $primary;
         padding: 0 1;
     }
@@ -31,8 +31,10 @@ class MenuBar(Widget):
     }
 
     MenuBar Button {
+        height: 1;
+        border: none;
         margin: 0 1 0 0;
-        min-width: 14;
+        min-width: 12;
     }
 
     MenuBar Button.selected {
@@ -40,7 +42,7 @@ class MenuBar(Widget):
     }
 
     MenuBar #back-button {
-        min-width: 8;
+        min-width: 6;
     }
     """
 
