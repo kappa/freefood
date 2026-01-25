@@ -96,10 +96,10 @@ class TestPostBlockBindings:
         binding_keys = [b[0] for b in PostBlock.BINDINGS]
         assert "down" in binding_keys
 
-    def test_bindings_contains_escape(self):
-        """BINDINGS should contain 'escape' binding."""
+    def test_bindings_contains_enter(self):
+        """BINDINGS should contain 'enter' binding for post mode."""
         binding_keys = [b[0] for b in PostBlock.BINDINGS]
-        assert "escape" in binding_keys
+        assert "enter" in binding_keys
 
     def test_up_binding_action(self):
         """Up binding should map to focus_previous action."""
@@ -117,13 +117,10 @@ class TestPostBlockBindings:
                 return
         pytest.fail("down binding not found")
 
-    def test_escape_binding_action(self):
-        """Escape binding should map to exit_post_mode action."""
-        for binding in PostBlock.BINDINGS:
-            if binding[0] == "escape":
-                assert binding[1] == "exit_post_mode"
-                return
-        pytest.fail("escape binding not found")
+    def test_on_key_method_exists(self):
+        """PostBlock should have on_key method for escape handling in post mode."""
+        assert hasattr(PostBlock, "on_key")
+        assert callable(getattr(PostBlock, "on_key"))
 
 
 class TestPostBlockConstants:

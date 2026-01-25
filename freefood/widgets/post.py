@@ -37,7 +37,8 @@ class PostBlock(Widget, can_focus=True):
         ("enter", "enter_post_mode", "Enter post"),
         ("up", "focus_previous", "Previous"),
         ("down", "focus_next", "Next"),
-        ("escape", "exit_post_mode", "Back to feed"),
+        # Note: escape is handled by on_key when in post_mode
+        # When not in post_mode, escape bubbles to FeedScreen to focus menu
     ]
 
     DEFAULT_CSS = """
