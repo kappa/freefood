@@ -7,6 +7,7 @@ from textual.widgets import Static
 
 from freefood.models import View, Post
 from freefood.widgets.menu import MenuBar
+from freefood.widgets.post import PostBlock
 
 
 class FeedScreen(Screen):
@@ -25,12 +26,6 @@ class FeedScreen(Screen):
     #feed-container {
         height: 1fr;
         padding: 0 1;
-    }
-
-    .post-placeholder {
-        border: solid $primary;
-        padding: 1;
-        margin: 1 0;
     }
     """
 
@@ -74,10 +69,7 @@ class FeedScreen(Screen):
                 container.mount(Static("No posts found", classes="loading"))
             else:
                 for post in self.posts:
-                    # Temporary: simple post display
-                    author_name = post.author.username if post.author else "unknown"
-                    post_text = f"@{author_name}:\n{post.body[:200]}..."
-                    container.mount(Static(post_text, classes="post-placeholder"))
+                    container.mount(PostBlock(post))
 
         except Exception as e:
             container.remove_children()
