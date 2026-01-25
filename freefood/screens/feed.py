@@ -11,6 +11,67 @@ from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
 
+class FeedContainer(ScrollableContainer):
+    """ScrollableContainer that auto-moves selection when focused post scrolls out of view."""
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """When scroll position changes, check if focused post is still visible."""
+        super().watch_scroll_y(old_value, new_value)
+        # Use set_timer to run the check after layout completes
+        # A small delay ensures the layout is updated
+        self.set_timer(0.01, self._check_focused_visibility)
+
+    def _check_focused_visibility(self) -> None:
+        """Check if focused widget is visible, move selection if not."""
+        focused = self.app.focused
+        if focused is None or not isinstance(focused, PostBlock):
+            return
+
+        # Check if focused post is in post_mode - don't auto-move if so
+        if focused.post_mode:
+            return
+
+        # Check if focused widget is visible in this container's viewport
+        if not self._is_widget_visible(focused):
+            self._move_focus_to_visible_post()
+
+    def _is_widget_visible(self, widget: PostBlock) -> bool:
+        """Check if a widget is visible within this container's viewport."""
+        # Get the widget's region relative to the container
+        widget_region = widget.region
+        # Get the container's visible region (accounting for scroll)
+        container_region = self.content_region
+
+        # Check if the widget's region intersects with the visible viewport
+        # The widget needs to be at least partially visible
+        # widget_region is relative to screen, container_region is the visible area
+        scroll_y = int(self.scroll_y)
+        container_top = self.region.y
+        container_bottom = container_top + self.region.height
+
+        widget_top = widget_region.y
+        widget_bottom = widget_top + widget_region.height
+
+        # Widget is visible if any part of it is within the container's viewport
+        return widget_bottom > container_top and widget_top < container_bottom
+
+    def _move_focus_to_visible_post(self) -> None:
+        """Move focus to a visible PostBlock."""
+        # Find the first visible PostBlock using screen regions
+        container_top = self.region.y
+        container_bottom = container_top + self.region.height
+
+        for post_block in self.query(PostBlock):
+            widget_region = post_block.region
+            widget_top = widget_region.y
+            widget_bottom = widget_top + widget_region.height
+
+            # Check if widget is at least partially visible
+            if widget_bottom > container_top and widget_top < container_bottom:
+                post_block.focus()
+                return
+
+
 class FeedScreen(Screen):
     """Screen for displaying feed content."""
 
@@ -47,7 +108,7 @@ class FeedScreen(Screen):
     def compose(self) -> ComposeResult:
         """Create feed screen widgets."""
         yield MenuBar(self.state.current_view)
-        with ScrollableContainer(id="feed-container"):
+        with FeedContainer(id="feed-container"):
             yield Static("Loading feed...", classes="loading")
 
     async def on_mount(self) -> None:
