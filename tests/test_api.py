@@ -149,3 +149,217 @@ async def test_get_home_feed():
         mock_client.get.assert_called_once_with(
             "/v2/timelines/home", params={"offset": 0, "limit": 30}
         )
+
+
+@pytest.mark.asyncio
+async def test_get_user_feed():
+    """get_user_feed should return list of posts for a specific user."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [
+            {
+                "id": "p1",
+                "body": "User post",
+                "createdBy": "u1",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": [],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "comments": [],
+        "users": [
+            {"id": "u1", "username": "alice", "screenName": "Alice", "type": "user"},
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        posts = await api.get_user_feed("alice")
+
+        assert len(posts) == 1
+        assert posts[0].body == "User post"
+        assert posts[0].author.username == "alice"
+        mock_client.get.assert_called_once_with(
+            "/v2/timelines/alice", params={"offset": 0, "limit": 30}
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_directs():
+    """get_directs should return list of direct message posts."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [
+            {
+                "id": "dm1",
+                "body": "Private message",
+                "createdBy": "u1",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": [],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "comments": [],
+        "users": [
+            {"id": "u1", "username": "bob", "screenName": "Bob", "type": "user"},
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        posts = await api.get_directs()
+
+        assert len(posts) == 1
+        assert posts[0].body == "Private message"
+        mock_client.get.assert_called_once_with(
+            "/v2/timelines/filter/directs", params={"offset": 0, "limit": 30}
+        )
+
+
+@pytest.mark.asyncio
+async def test_search():
+    """search should return posts matching the query."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [
+            {
+                "id": "s1",
+                "body": "Found post with keyword",
+                "createdBy": "u1",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": [],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "comments": [],
+        "users": [
+            {"id": "u1", "username": "charlie", "screenName": "Charlie", "type": "user"},
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        posts = await api.search("keyword")
+
+        assert len(posts) == 1
+        assert posts[0].body == "Found post with keyword"
+        mock_client.get.assert_called_once_with(
+            "/v2/search", params={"q": "keyword", "offset": 0, "limit": 30}
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_post():
+    """get_post should return a single post with all comments."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [
+            {
+                "id": "post-123",
+                "body": "Single post",
+                "createdBy": "u1",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": ["c1"],
+                "likes": [],
+                "postedTo": [],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "comments": [
+            {
+                "id": "c1",
+                "body": "A comment",
+                "createdBy": "u2",
+                "createdAt": "1706097700000",
+                "likes": 0,
+            }
+        ],
+        "users": [
+            {"id": "u1", "username": "dave", "screenName": "Dave", "type": "user"},
+            {"id": "u2", "username": "eve", "screenName": "Eve", "type": "user"},
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        post = await api.get_post("post-123")
+
+        assert post is not None
+        assert post.id == "post-123"
+        assert post.body == "Single post"
+        assert len(post.comments) == 1
+        assert post.comments[0].body == "A comment"
+        mock_client.get.assert_called_once_with(
+            "/v2/posts/post-123", params={"maxComments": "all", "maxLikes": "all"}
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_post_not_found():
+    """get_post should return None when no posts are in response."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    mock_response = {
+        "posts": [],
+        "comments": [],
+        "users": [],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        post = await api.get_post("nonexistent-id")
+
+        assert post is None

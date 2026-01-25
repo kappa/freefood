@@ -22,7 +22,7 @@ class Comment:
 
     id: str
     body: str
-    author: User
+    author: User | None
     created_at: datetime
     likes: int
     is_liked: bool = False
@@ -35,7 +35,7 @@ class Post:
 
     id: str
     body: str
-    author: User
+    author: User | None
     groups: list[User]
     created_at: datetime
     updated_at: datetime
