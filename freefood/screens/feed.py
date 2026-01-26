@@ -191,6 +191,12 @@ class FeedScreen(Screen):
 
     def action_focus_menu(self) -> None:
         """Focus the menu bar."""
+        focused = self.app.focused
+        post_block = self._find_post_block(focused)
+        if post_block is not None and post_block.post_mode:
+            post_block.action_exit_post_mode()
+            return
+
         menu = self.query_one(MenuBar)
         menu.focus_current_view_button()
 
@@ -200,6 +206,15 @@ class FeedScreen(Screen):
         first_post = container.query(PostBlock).first()
         if first_post:
             first_post.focus()
+
+    def _find_post_block(self, widget) -> PostBlock | None:
+        """Find nearest PostBlock ancestor for a focused widget."""
+        current = widget
+        while current is not None:
+            if isinstance(current, PostBlock):
+                return current
+            current = current.parent
+        return None
 
     def action_refresh(self) -> None:
         """Refresh feed."""

@@ -423,3 +423,87 @@ class TestUserFeedHeader:
 
             header = screen.query_one("#feed-header", Static)
             assert "News Group" in str(header.content)
+
+
+class TestPostModeEscape:
+    """Tests for escape behavior in post mode."""
+
+    @pytest.mark.asyncio
+    async def test_escape_exits_post_mode_to_feed(self):
+        """Escape should exit post mode and keep focus in feed."""
+        from textual.app import App
+
+        posts = [make_post(id="p1", body="Post 1")]
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = None
+                self.state = AppState()
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            container = screen.query_one("#feed-container")
+            container.remove_children()
+            for post in posts:
+                await container.mount(PostBlock(post))
+            await pilot.pause()
+
+            post_block = container.query(PostBlock).first()
+            assert post_block is not None
+            app.set_focus(post_block)
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+            assert post_block.post_mode is True
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            assert post_block.post_mode is False
+            assert app.focused is post_block
+
+    @pytest.mark.asyncio
+    async def test_focus_menu_action_exits_post_mode(self):
+        """FeedScreen focus_menu action should exit post mode first."""
+        from textual.app import App
+
+        posts = [make_post(id="p1", body="Post 1")]
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = None
+                self.state = AppState()
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            container = screen.query_one("#feed-container")
+            container.remove_children()
+            for post in posts:
+                await container.mount(PostBlock(post))
+            await pilot.pause()
+
+            post_block = container.query(PostBlock).first()
+            assert post_block is not None
+            app.set_focus(post_block)
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+            assert post_block.post_mode is True
+
+            screen.action_focus_menu()
+            await pilot.pause()
+
+            assert post_block.post_mode is False
+            assert app.focused is post_block
