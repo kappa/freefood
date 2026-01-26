@@ -21,9 +21,9 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - Like/unlike posts
 - Hide/unhide posts
 - API client migrated to v4
+- **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 0: Fix comment display & loading
 - Section 1: Search view
 - Section 2: User/group feed navigation
 - Section 3: Subscribe/unsubscribe
@@ -36,9 +36,10 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 0: Fix Comment Display & Loading
+## Section 0: Fix Comment Display & Loading ✓ COMPLETED
 
 **Priority:** Critical - current behavior is incorrect
+**Status:** ✓ Completed (commit 80a8ea2)
 
 **Problem:** Current implementation assumes omitted comments are always at the top ("N earlier comments"). The API provides exact placement via `omittedCommentsOffset`.
 
