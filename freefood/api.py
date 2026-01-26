@@ -163,6 +163,9 @@ class FreeFeedAPI:
             for key in ("youAreSubscribed", "youSubscribed", "isSubscribed", "subscribed"):
                 if key in user_data:
                     return bool(user_data[key])
+            you_can = user_data.get("youCan")
+            if isinstance(you_can, list) and "unsubscribe" in you_can:
+                return True
 
         return False
 

@@ -95,6 +95,20 @@ class FeedScreen(Screen):
     #feed-header {
         text-style: bold;
         margin: 0 0 1 0;
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    #btn-subscribe {
+        height: 1;
+        padding: 0 1;
+        border: none;
+        margin: 0 0 1 0;
+        min-width: 12;
+        background: transparent;
+        color: $accent;
+        text-style: underline;
     }
     """
 
@@ -150,22 +164,13 @@ class FeedScreen(Screen):
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
                     header_text = self._feed_header_text(self.posts)
+                    container.mount(Static(header_text, id="feed-header"))
                     if self.state.current_view == View.USER_FEED:
                         self.is_subscribed = await api.get_user_subscription_status(
                             self.state.current_target
                         )
                         label = "Unsubscribe" if self.is_subscribed else "Subscribe"
-                        header_row = HorizontalGroup(
-                            Static(header_text, id="feed-header"),
-                            Button(label, id="btn-subscribe"),
-                            id="feed-header-row",
-                        )
-                    else:
-                        header_row = HorizontalGroup(
-                            Static(header_text, id="feed-header"),
-                            id="feed-header-row",
-                        )
-                    container.mount(header_row)
+                        container.mount(Button(label, id="btn-subscribe"))
 
             if not self.posts:
                 container.mount(Static("No posts found", classes="loading"))

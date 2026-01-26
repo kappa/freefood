@@ -549,3 +549,24 @@ async def test_get_user_subscription_status_reads_user_object_flag():
 
         assert result is False
         mock_client.get.assert_called_once_with("/v4/users/alice")
+
+
+@pytest.mark.asyncio
+async def test_get_user_subscription_status_reads_you_can_unsubscribe():
+    """get_user_subscription_status should detect subscriptions via youCan."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {"users": {"youCan": ["unsubscribe", "dm"]}}
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        result = await api.get_user_subscription_status("alice")
+
+        assert result is True
+        mock_client.get.assert_called_once_with("/v4/users/alice")

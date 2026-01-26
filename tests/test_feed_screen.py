@@ -62,7 +62,7 @@ class TestFeedModeNavigation:
             def compose(self):
                 yield FeedScreen(self.state)
 
-        async with TestApp().run_test(size=(80, 20)) as pilot:
+        async with TestApp().run_test(size=(40, 20)) as pilot:
             app = pilot.app
             screen = app.query_one(FeedScreen)
 
@@ -357,12 +357,12 @@ class TestUserFeedHeader:
                 self.api = FakeAPI()
                 self.state = AppState(current_view=View.USER_FEED, current_target="bob")
 
-            def compose(self):
-                yield FeedScreen(self.state)
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
 
         async with TestApp().run_test(size=(80, 20)) as pilot:
             app = pilot.app
-            screen = app.query_one(FeedScreen)
+            screen = app.screen
             await pilot.pause()
 
             header = screen.query_one("#feed-header", Static)
@@ -390,16 +390,52 @@ class TestUserFeedHeader:
                 self.api = FakeAPI()
                 self.state = AppState(current_view=View.USER_FEED, current_target="bob")
 
-            def compose(self):
-                yield FeedScreen(self.state)
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
 
         async with TestApp().run_test(size=(80, 20)) as pilot:
             app = pilot.app
-            screen = app.query_one(FeedScreen)
+            screen = app.screen
             await pilot.pause()
 
             header = screen.query_one("#feed-header", Static)
             assert "Bob Builder" in str(header.content)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_button_renders_below_header(self):
+        """Subscribe button should render on its own line below the header."""
+        from textual.app import App
+        from textual.widgets import Button, Static
+
+        long_name = "Very Long Screen Name " * 6
+        author = make_user(username="bob", screen_name=long_name)
+        posts = [make_post(id="p1", author=author, body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return False
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.screen
+            await pilot.pause()
+
+            header = screen.query_one("#feed-header", Static)
+            button = screen.query_one("#btn-subscribe", Button)
+
+            assert button.region.y > header.region.y
 
     @pytest.mark.asyncio
     async def test_group_feed_header_includes_screen_name(self):
@@ -454,17 +490,80 @@ class TestUserFeedHeader:
                 self.api = FakeAPI()
                 self.state = AppState(current_view=View.USER_FEED, current_target="bob")
 
-            def compose(self):
-                yield FeedScreen(self.state)
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
 
         async with TestApp().run_test(size=(80, 20)) as pilot:
             app = pilot.app
-            screen = app.query_one(FeedScreen)
+            screen = app.screen
             await pilot.pause()
 
             button = screen.query_one("#btn-subscribe", Button)
             assert button.label.plain == "Subscribe"
 
+    @pytest.mark.asyncio
+    async def test_subscribe_button_has_visible_width(self):
+        """Subscribe button should render with a visible width."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        posts = [make_post(id="p1", body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return False
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.screen
+            await pilot.pause()
+
+            button = screen.query_one("#btn-subscribe", Button)
+            assert button.region.width > 0
+
+    @pytest.mark.asyncio
+    async def test_subscribe_button_is_single_line(self):
+        """Subscribe button should render as a single line."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        posts = [make_post(id="p1", body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return False
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            async def on_mount(self):
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.screen
+            await pilot.pause()
+
+            button = screen.query_one("#btn-subscribe", Button)
+            assert button.region.height == 1
     @pytest.mark.asyncio
     async def test_subscribe_button_toggles(self):
         """Subscribe button should toggle label and call API."""
