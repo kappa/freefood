@@ -667,6 +667,82 @@ class TestPostBlockLayout:
             app.query_one("#comment-meta", HorizontalGroup)
 
 
+class TestCommentAuthorVisibility:
+    """Tests for comment author placement."""
+
+    @pytest.mark.asyncio
+    async def test_comment_author_not_pushed_off_screen(self):
+        """Comment author should appear near the comment prefix."""
+        from textual.app import App
+        from textual.containers import HorizontalGroup
+        from textual.widgets import Button
+
+        author = make_user(username="bob")
+        comment = Comment(
+            id="c1",
+            body="Nice post",
+            author=author,
+            created_at=datetime.now(),
+            likes=0,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            meta = app.query_one("#comment-meta", HorizontalGroup)
+            button = app.query_one("#user-link-comment-user-bob", Button)
+            assert button.region.x - meta.region.x < 10
+
+
+class TestLikeAuthorVisibility:
+    """Tests for like user placement."""
+
+    @pytest.mark.asyncio
+    async def test_like_user_not_pushed_off_screen(self):
+        """Like users should appear near the likes prefix."""
+        from textual.app import App
+        from textual.containers import HorizontalGroup
+        from textual.widgets import Button
+
+        likers = [make_user(username="bob")]
+        post = make_post(likes=likers)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            likes = app.query_one("#post-likes", HorizontalGroup)
+            button = app.query_one("#user-link-like-user-bob", Button)
+            assert button.region.x - likes.region.x < 10
+
+
+class TestUserLinkSpacing:
+    """Tests for user link spacing."""
+
+    @pytest.mark.asyncio
+    async def test_user_link_not_overly_wide(self):
+        """User link button should not add extra padding."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            button = app.query_one("#user-link-header-user-alice", Button)
+            assert button.region.width <= len("@alice") + 2
+
+
 class TestPostBlockLikeButtonLabel:
     """Tests for Like button label based on is_liked state."""
 

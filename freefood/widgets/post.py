@@ -52,6 +52,10 @@ class CommentBlock(Widget):
         background: $surface-lighten-2;
         border-left: solid $accent;
     }
+
+    CommentBlock #comment-meta-prefix {
+        width: 3;
+    }
     """
 
     MAX_COMMENT_LINES = 10
@@ -93,7 +97,7 @@ class CommentBlock(Widget):
                 markup=bool(self.highlight_terms),
             )
             with HorizontalGroup(id="comment-meta"):
-                yield Static("-- ")
+                yield Static("-- ", id="comment-meta-prefix")
                 if self.comment.author is not None:
                     author_btn = Button(
                         f"@{self.comment.author.username}",
@@ -149,10 +153,11 @@ class PostBlock(Widget, can_focus=True):
     PostBlock .user-link {
         border: none;
         height: 1;
-        padding: 0 1 0 0;
+        padding: 0;
         background: transparent;
         color: $accent;
         text-style: underline;
+        min-width: 0;
     }
 
     PostBlock .post-body {
@@ -192,6 +197,14 @@ class PostBlock(Widget, can_focus=True):
     PostBlock .show-more {
         color: $text-muted;
         margin: 0;
+    }
+
+    PostBlock #post-likes-prefix {
+        width: 2;
+    }
+
+    PostBlock .likes-sep {
+        width: 2;
     }
 
     PostBlock Button:focus {
@@ -415,7 +428,7 @@ class PostBlock(Widget, can_focus=True):
 
         displayed = likes[:3]
         with HorizontalGroup(id="post-likes", classes="post-likes"):
-            yield Static("♥ ")
+            yield Static("♥ ", id="post-likes-prefix")
             for idx, user in enumerate(displayed):
                 btn = Button(
                     f"@{user.username}",
@@ -425,7 +438,7 @@ class PostBlock(Widget, can_focus=True):
                 btn.can_focus = self.post_mode
                 yield btn
                 if idx < len(displayed) - 1:
-                    yield Static(", ")
+                    yield Static(", ", classes="likes-sep")
 
             if len(likes) <= 3:
                 yield Static(" liked this")
