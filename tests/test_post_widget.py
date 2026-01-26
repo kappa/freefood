@@ -1269,6 +1269,110 @@ class TestPostModeNavigation:
             await pilot.pause()
             assert app.focused.id == "btn-comment"
 
+    @pytest.mark.asyncio
+    async def test_up_from_comment_focuses_header_user_link(self):
+        """Up from Comment should focus the post author user link."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        post = make_post(author=make_user(username="alice"))
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Start at Comment button
+            assert app.focused.id == "btn-comment"
+
+            # Up should move to the author user link
+            await pilot.press("up")
+            await pilot.pause()
+
+            focused = app.focused
+            assert isinstance(focused, Button)
+            assert focused.id == "user-link-header-user-alice"
+
+    @pytest.mark.asyncio
+    async def test_liker_user_links_focusable_in_post_mode(self):
+        """Liker user links should be focusable in post mode."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        likers = [
+            make_user(id="u1", username="bob"),
+            make_user(id="u2", username="carol"),
+        ]
+        post = make_post(likes=likers)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            bob_link = app.query_one("#user-link-like-user-bob", Button)
+            carol_link = app.query_one("#user-link-like-user-carol", Button)
+
+            assert bob_link.can_focus is True
+            assert carol_link.can_focus is True
+
+    @pytest.mark.asyncio
+    async def test_tab_from_comment_focuses_comment_author(self):
+        """Tab from a comment should focus its author user link."""
+        from textual.app import App
+        from textual.widgets import Button
+        from freefood.widgets.post import CommentBlock
+
+        author = make_user(username="bob")
+        comment = Comment(
+            id="c1",
+            body="Nice post",
+            author=author,
+            created_at=datetime.now(),
+            likes=0,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            comment_block = app.query_one(CommentBlock)
+            app.set_focus(comment_block)
+            await pilot.pause()
+
+            await pilot.press("tab")
+            await pilot.pause()
+
+            focused = app.focused
+            assert isinstance(focused, Button)
+            assert focused.id == "user-link-comment-user-bob"
+
 
 class TestPostModelOmittedCommentsFields:
     """Tests for omitted comments fields in Post model."""

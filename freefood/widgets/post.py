@@ -108,7 +108,7 @@ class CommentBlock(Widget):
                         ),
                         classes="user-link",
                     )
-                    author_btn.can_focus = False
+                    author_btn.can_focus = self.can_focus
                     yield author_btn
                 else:
                     yield Static("@unknown")
@@ -272,7 +272,7 @@ class PostBlock(Widget, can_focus=True):
                         id=build_user_link_id("header", author.type, author.username),
                         classes="user-link",
                     )
-                    author_btn.can_focus = False
+                    author_btn.can_focus = self.post_mode
                     yield author_btn
                 else:
                     yield Static("@unknown")
@@ -287,7 +287,7 @@ class PostBlock(Widget, can_focus=True):
                             id=build_user_link_id("header", group.type, group.username),
                             classes="user-link",
                         )
-                        group_btn.can_focus = False
+                        group_btn.can_focus = self.post_mode
                         yield group_btn
                     yield Static(":")
                 else:
@@ -436,7 +436,7 @@ class PostBlock(Widget, can_focus=True):
                     id=build_user_link_id("like", user.type, user.username),
                     classes="user-link",
                 )
-                btn.can_focus = False
+                btn.can_focus = self.post_mode
                 yield btn
                 if idx < len(displayed) - 1:
                     yield Static(", ", classes="likes-sep")
@@ -487,6 +487,11 @@ class PostBlock(Widget, can_focus=True):
 
     def _focus_first_button(self) -> None:
         """Focus the first button in this post."""
+        preferred = self.query("#btn-comment")
+        for button in preferred:
+            if isinstance(button, Button) and button.can_focus:
+                button.focus()
+                return
         for button in self.query(Button):
             if button.can_focus:
                 button.focus()
