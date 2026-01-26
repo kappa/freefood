@@ -76,6 +76,12 @@ class FreeFeedAPI:
         users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
         for group in data.get("groups", []):
             users_by_id[group["id"]] = self._parse_user(group)
+        direct_subscriptions = {}
+        for subscription in data.get("subscriptions", []):
+            if subscription.get("name") == "Directs":
+                user = users_by_id.get(subscription.get("user"))
+                if user is not None:
+                    direct_subscriptions[subscription.get("id")] = user
         comments_by_id = {
             c["id"]: self._parse_comment(c, users_by_id)
             for c in data.get("comments", [])
@@ -102,6 +108,17 @@ class FreeFeedAPI:
                 for fid in p.get("postedTo", [])
                 if fid in users_by_id and users_by_id[fid].type == "group"
             ]
+            direct_recipients = [
+                direct_subscriptions[fid]
+                for fid in p.get("postedTo", [])
+                if fid in direct_subscriptions
+            ]
+            if author is not None:
+                direct_recipients = [
+                    recipient
+                    for recipient in direct_recipients
+                    if recipient.id != author.id
+                ]
             is_own = (
                 author is not None
                 and self.current_user is not None
@@ -122,6 +139,7 @@ class FreeFeedAPI:
                     omitted_comment_likes=p.get("omittedCommentLikes", 0),
                     omitted_likes=p.get("omittedLikes", 0),
                     likes=post_likes,
+                    direct_recipients=direct_recipients,
                     is_liked=p.get("hasOwnLike", False),
                     is_hidden=p.get("isHidden", False),
                     is_own=is_own,
@@ -224,6 +242,14 @@ class FreeFeedAPI:
         response.raise_for_status()
         data = response.json()
         return int(data.get("unreadNotificationsNumber", 0))
+
+    async def get_unread_directs_count(self) -> int:
+        """Fetch unread directs count."""
+        client = await self._get_client()
+        response = await client.get("/v4/users/whoami")
+        response.raise_for_status()
+        data = response.json()
+        return int(data.get("unreadDirectsNumber", 0))
 
     async def search(self, query: str, offset: int = 0, limit: int = 30) -> list[Post]:
         """Search posts."""

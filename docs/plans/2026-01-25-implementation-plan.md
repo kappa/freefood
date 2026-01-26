@@ -24,7 +24,7 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 5: Directs view
+- Section 5: Directs view (compose pending)
 - Section 6: Compose block (create posts)
 - Section 7: Comment creation
 - Section 8: Edit posts/comments
@@ -240,21 +240,21 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ### Tasks
 
-**5.1 Reuse FeedScreen for Directs**
+**5.1 Reuse FeedScreen for Directs** ✓
 - FeedScreen with `view == View.DIRECTS` conditional
 - Calls `api.get_directs()` instead of `api.get_home_feed()`
 - Less code duplication than separate screen
 
-**5.2 Menu bar connection**
+**5.2 Menu bar connection** ✓
 - Directs button switches to `View.DIRECTS`
 - Triggers appropriate API call
 
-**5.3 Unread indicator**
+**5.3 Unread indicator** ✓
 - API returns `unreadDirectsNumber` in whoami response
 - Show on Directs menu button: `Directs (3)`
 - Update after viewing directs
 
-**5.4 Direct message display**
+**5.4 Direct message display** ✓
 - Same PostBlock rendering
 - Header shows recipients: `@alice → @bob, @carol:`
 - No groups in directs

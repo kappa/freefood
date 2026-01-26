@@ -888,3 +888,38 @@ class TestFeedScreenMenuNavigation:
             from freefood.screens.notifications import NotificationsScreen
 
             assert isinstance(app.screen, NotificationsScreen)
+
+
+class TestDirectsUnreadIndicator:
+    """Tests for unread directs indicator."""
+
+    @pytest.mark.asyncio
+    async def test_directs_count_updates_menu(self):
+        """FeedScreen should update directs count label."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        class FakeAPI:
+            async def get_home_feed(self):
+                return []
+
+            async def get_unread_notifications_count(self) -> int:
+                return 0
+
+            async def get_unread_directs_count(self) -> int:
+                return 3
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.HOME)
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.screen
+            button = screen.query_one("#directs-button", Button)
+            assert button.label.plain == "Directs (3)"

@@ -277,7 +277,22 @@ class PostBlock(Widget, can_focus=True):
                 else:
                     yield Static("@unknown")
 
-                if self.post.groups:
+                if self.post.direct_recipients:
+                    yield Static(" -> ")
+                    for idx, recipient in enumerate(self.post.direct_recipients):
+                        if idx > 0:
+                            yield Static(", ")
+                        recipient_btn = Button(
+                            f"@{recipient.username}",
+                            id=build_user_link_id(
+                                "header", recipient.type, recipient.username
+                            ),
+                            classes="user-link",
+                        )
+                        recipient_btn.can_focus = self.post_mode
+                        yield recipient_btn
+                    yield Static(":")
+                elif self.post.groups:
                     yield Static(" wrote in ")
                     for idx, group in enumerate(self.post.groups):
                         if idx > 0:
@@ -342,6 +357,9 @@ class PostBlock(Widget, can_focus=True):
     def _format_header(self) -> str:
         """Format post header."""
         author = f"@{self.post.author.username}" if self.post.author else "@unknown"
+        if self.post.direct_recipients:
+            recipients = ", ".join(f"@{u.username}" for u in self.post.direct_recipients)
+            return f"{author} -> {recipients}:"
         if self.post.groups:
             groups = ", ".join(f"@{g.username}" for g in self.post.groups)
             return f"{author} wrote in {groups}:"

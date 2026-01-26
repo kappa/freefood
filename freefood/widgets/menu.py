@@ -61,6 +61,7 @@ class MenuBar(Widget):
         super().__init__()
         self.current_view = current_view
         self.notifications_count: int | None = None
+        self.directs_count: int | None = None
 
     def compose(self) -> ComposeResult:
         """Create menu buttons."""
@@ -93,6 +94,8 @@ class MenuBar(Widget):
 
         if self.notifications_count is not None:
             self.set_notifications_count(self.notifications_count)
+        if self.directs_count is not None:
+            self.set_directs_count(self.directs_count)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -124,6 +127,15 @@ class MenuBar(Widget):
         if count > 0:
             label = f"Notifications ({count})"
         button = self.query_one("#notifications-button", Button)
+        button.label = label
+
+    def set_directs_count(self, count: int) -> None:
+        """Update directs button label with unread count."""
+        self.directs_count = count
+        label = "Directs"
+        if count > 0:
+            label = f"Directs ({count})"
+        button = self.query_one("#directs-button", Button)
         button.label = label
 
     def focus_current_view_button(self) -> None:

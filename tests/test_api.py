@@ -108,6 +108,47 @@ async def test_denormalize_posts():
 
 
 @pytest.mark.asyncio
+async def test_denormalize_posts_sets_direct_recipients():
+    """denormalize_posts should map direct recipients from subscriptions."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(
+        id="me-123",
+        username="me",
+        screen_name="Me",
+        type="user",
+    )
+
+    normalized_data = {
+        "posts": [
+            {
+                "id": "post-1",
+                "body": "Direct message",
+                "createdBy": "user-1",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": ["direct-1", "direct-2"],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "users": [
+            {"id": "user-1", "username": "alice", "screenName": "Alice", "type": "user"},
+            {"id": "user-2", "username": "bob", "screenName": "Bob", "type": "user"},
+        ],
+        "subscriptions": [
+            {"id": "direct-1", "name": "Directs", "user": "user-1"},
+            {"id": "direct-2", "name": "Directs", "user": "user-2"},
+        ],
+    }
+
+    posts = api._denormalize_posts(normalized_data)
+
+    assert [u.username for u in posts[0].direct_recipients] == ["bob"]
+
+
+@pytest.mark.asyncio
 async def test_get_home_feed():
     """get_home_feed should return list of posts."""
     api = FreeFeedAPI("test-token")
@@ -633,4 +674,25 @@ async def test_get_unread_notifications_count_reads_whoami():
         count = await api.get_unread_notifications_count()
 
         assert count == 5
+        mock_client.get.assert_called_once_with("/v4/users/whoami")
+
+
+@pytest.mark.asyncio
+async def test_get_unread_directs_count_reads_whoami():
+    """get_unread_directs_count should read whoami."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {"unreadNotificationsNumber": 5, "unreadDirectsNumber": 2}
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        count = await api.get_unread_directs_count()
+
+        assert count == 2
         mock_client.get.assert_called_once_with("/v4/users/whoami")

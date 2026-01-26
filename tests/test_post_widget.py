@@ -23,6 +23,7 @@ def make_post(
     body: str = "Test post body",
     author: User | None = None,
     groups: list[User] | None = None,
+    direct_recipients: list[User] | None = None,
     comments: list[Comment] | None = None,
     likes: list[User] | None = None,
     is_liked: bool = False,
@@ -48,6 +49,7 @@ def make_post(
         omitted_comment_likes=omitted_comment_likes,
         omitted_likes=omitted_likes,
         likes=likes or [],
+        direct_recipients=direct_recipients or [],
         is_liked=is_liked,
         is_hidden=is_hidden,
         is_own=is_own,
@@ -183,6 +185,16 @@ class TestPostBlockFormatting:
         widget = PostBlock(post)
         header = widget._format_header()
         assert "@unknown wrote:" in header
+
+    def test_format_header_direct_recipients(self):
+        """_format_header should include direct recipients."""
+        author = make_user(username="alice")
+        bob = make_user(id="u2", username="bob")
+        carol = make_user(id="u3", username="carol")
+        post = make_post(author=author, groups=[], direct_recipients=[bob, carol])
+        widget = PostBlock(post)
+        header = widget._format_header()
+        assert header == "@alice -> @bob, @carol:"
 
     def test_format_body_short(self):
         """_format_body should return full body when short."""

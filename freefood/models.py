@@ -45,6 +45,7 @@ class Post:
     omitted_comment_likes: int
     omitted_likes: int
     likes: list[User]
+    direct_recipients: list[User] = field(default_factory=list)
     is_liked: bool = False
     is_hidden: bool = False
     is_own: bool = False

@@ -168,6 +168,13 @@ class FeedScreen(Screen):
             except Exception:
                 pass
 
+            try:
+                count = await api.get_unread_directs_count()
+                menu = self.query_one(MenuBar)
+                menu.set_directs_count(count)
+            except Exception:
+                pass
+
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
                     header_text = self._feed_header_text(self.posts)
