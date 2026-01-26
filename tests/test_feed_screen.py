@@ -36,6 +36,8 @@ def make_post(
         updated_at=now,
         comments=[],
         omitted_comments=0,
+        omitted_comments_offset=0,
+        omitted_comment_likes=0,
         omitted_likes=0,
         likes=[],
     )

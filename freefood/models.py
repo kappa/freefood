@@ -41,6 +41,8 @@ class Post:
     updated_at: datetime
     comments: list[Comment]
     omitted_comments: int
+    omitted_comments_offset: int
+    omitted_comment_likes: int
     omitted_likes: int
     likes: list[User]
     is_liked: bool = False

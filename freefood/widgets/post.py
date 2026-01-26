@@ -265,53 +265,56 @@ class PostBlock(Widget, can_focus=True):
             return f"♥ {names} and {others} others liked this"
 
     def _render_comments(self):
-        """Render comments section."""
+        """Render comments section.
+
+        Comments are displayed with the 'more comments' button inserted at the
+        position specified by omittedCommentsOffset. The offset indicates where
+        the omitted comments gap is in the full comment list.
+
+        Example: comments=[c1,c2,c3], omittedComments=10, omittedCommentsOffset=1
+        Display: c1, [10 more comments with M likes], c2, c3
+        """
         comments = self.post.comments
         omitted = self.post.omitted_comments
-        total = len(comments) + omitted
+        offset = self.post.omitted_comments_offset
+        omitted_likes = self.post.omitted_comment_likes
 
-        if total == 0:
+        if not comments and omitted == 0:
             return
 
-        # If there are omitted comments, show indicator at top (as focusable button)
-        if omitted > 0 and not self.comments_expanded:
+        # Track if we've yielded the more-comments button
+        button_yielded = False
+
+        # Render comments with the 'more comments' button at the correct offset
+        for i, comment in enumerate(comments):
+            # Insert 'more comments' button at the offset position
+            if omitted > 0 and not self.comments_expanded and i == offset and not button_yielded:
+                btn = Button(
+                    f"── {omitted} more comments with {omitted_likes} likes ──",
+                    id="btn-more-comments",
+                    classes="more-comments",
+                )
+                btn.can_focus = self.post_mode
+                yield btn
+                button_yielded = True
+            yield CommentBlock(comment, post_mode=self.post_mode)
+
+        # If offset equals len(comments) and button not yet yielded, button goes at the end
+        if omitted > 0 and not self.comments_expanded and offset >= len(comments) and not button_yielded:
             btn = Button(
-                f"── {omitted} earlier comments ──",
+                f"── {omitted} more comments with {omitted_likes} likes ──",
                 id="btn-more-comments",
                 classes="more-comments",
             )
             btn.can_focus = self.post_mode
             yield btn
 
-        # Show first 2 and last 2 if we have many local comments
-        if len(comments) <= 4 or self.comments_expanded:
-            for comment in comments:
-                yield CommentBlock(comment, post_mode=self.post_mode)
-        else:
-            # First 2
-            for comment in comments[:2]:
-                yield CommentBlock(comment, post_mode=self.post_mode)
-
-            # Middle expander (as focusable button)
-            middle_count = len(comments) - 4
-            btn = Button(
-                f"── {middle_count} more comments ──",
-                id="btn-middle-comments",
-                classes="more-comments",
-            )
-            btn.can_focus = self.post_mode
-            yield btn
-
-            # Last 2
-            for comment in comments[-2:]:
-                yield CommentBlock(comment, post_mode=self.post_mode)
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "show-more-body":
             self.body_expanded = True
             self.refresh(recompose=True)
-        elif event.button.id in ("btn-more-comments", "btn-middle-comments"):
+        elif event.button.id == "btn-more-comments":
             self.comments_expanded = True
             self.post_message(self.ExpandComments(self.post))
         elif event.button.id == "btn-like":

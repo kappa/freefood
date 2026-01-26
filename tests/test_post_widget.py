@@ -29,6 +29,8 @@ def make_post(
     is_hidden: bool = False,
     is_own: bool = False,
     omitted_comments: int = 0,
+    omitted_comments_offset: int = 0,
+    omitted_comment_likes: int = 0,
     omitted_likes: int = 0,
 ) -> Post:
     """Create a test post."""
@@ -42,6 +44,8 @@ def make_post(
         updated_at=now,
         comments=comments or [],
         omitted_comments=omitted_comments,
+        omitted_comments_offset=omitted_comments_offset,
+        omitted_comment_likes=omitted_comment_likes,
         omitted_likes=omitted_likes,
         likes=likes or [],
         is_liked=is_liked,
@@ -809,14 +813,19 @@ class TestMoreCommentsButton:
             assert focused.id == "btn-more-comments", f"Expected btn-more-comments, got {focused.id}"
 
     @pytest.mark.asyncio
-    async def test_middle_more_comments_button_focusable(self):
-        """Middle more-comments button (between first/last 2) should be focusable."""
+    async def test_more_comments_button_with_offset_in_middle(self):
+        """More comments button should appear at offset position between comments."""
         from textual.app import App
         from textual.widgets import Button
 
-        # Create a post with more than 4 comments to show the middle expander
-        comments = [make_comment(id=f"c{i}") for i in range(6)]
-        post = make_post(comments=comments)
+        # 3 comments with omitted comments at offset 1 (after first comment)
+        comments = [make_comment(id=f"c{i}") for i in range(3)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=5,
+            omitted_comments_offset=1,
+            omitted_comment_likes=10,
+        )
 
         class TestApp(App):
             def compose(self):
@@ -831,10 +840,10 @@ class TestMoreCommentsButton:
             await pilot.press("enter")
             await pilot.pause()
 
-            # Find the middle-more-comments button
-            middle_btn = app.query_one("#btn-middle-comments", Button)
-            assert middle_btn is not None, "Middle more comments button not found"
-            assert middle_btn.can_focus is True, "Middle more comments button should be focusable"
+            # Find the more-comments button
+            more_btn = app.query_one("#btn-more-comments", Button)
+            assert more_btn is not None, "More comments button not found"
+            assert more_btn.can_focus is True, "More comments button should be focusable"
 
 
 class TestPostModeNavigation:
@@ -1044,3 +1053,174 @@ class TestPostModeNavigation:
             await pilot.press("up")
             await pilot.pause()
             assert app.focused.id == "btn-comment"
+
+
+class TestPostModelOmittedCommentsFields:
+    """Tests for omitted comments fields in Post model."""
+
+    def test_post_has_omitted_comments_offset(self):
+        """Post should have omitted_comments_offset field."""
+        post = make_post(omitted_comments_offset=3)
+        assert post.omitted_comments_offset == 3
+
+    def test_post_has_omitted_comment_likes(self):
+        """Post should have omitted_comment_likes field."""
+        post = make_post(omitted_comment_likes=15)
+        assert post.omitted_comment_likes == 15
+
+    def test_post_defaults_omitted_comments_offset_to_zero(self):
+        """Post should default omitted_comments_offset to 0."""
+        post = make_post()
+        assert post.omitted_comments_offset == 0
+
+    def test_post_defaults_omitted_comment_likes_to_zero(self):
+        """Post should default omitted_comment_likes to 0."""
+        post = make_post()
+        assert post.omitted_comment_likes == 0
+
+
+class TestMoreCommentsButtonPlacement:
+    """Tests for correct placement of 'more comments' button based on offset."""
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_at_offset_position(self):
+        """More comments button should be placed at omittedCommentsOffset position."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        # 3 comments, with 10 omitted after first comment (offset=1)
+        comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(3)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=10,
+            omitted_comments_offset=1,
+            omitted_comment_likes=25,
+        )
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Get all children in order (comments and buttons)
+            from freefood.widgets.post import CommentBlock
+
+            children = list(post_block.query("CommentBlock, #btn-more-comments"))
+
+            # Order should be: Comment0, btn-more-comments, Comment1, Comment2
+            assert len(children) == 4
+            assert isinstance(children[0], CommentBlock)
+            assert children[1].id == "btn-more-comments"
+            assert isinstance(children[2], CommentBlock)
+            assert isinstance(children[3], CommentBlock)
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_text_includes_likes(self):
+        """More comments button should show 'N more comments with M likes'."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        comments = [make_comment(id=f"c{i}") for i in range(2)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=6,
+            omitted_comments_offset=1,
+            omitted_comment_likes=8,
+        )
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn = app.query_one("#btn-more-comments", Button)
+            label_text = btn.label.plain
+            assert "6 more comments" in label_text
+            assert "8 likes" in label_text
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_at_offset_zero(self):
+        """More comments button at offset 0 should appear before all comments."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(2)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=5,
+            omitted_comments_offset=0,
+            omitted_comment_likes=10,
+        )
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            from freefood.widgets.post import CommentBlock
+
+            children = list(app.query_one(PostBlock).query("CommentBlock, #btn-more-comments"))
+
+            # Order should be: btn-more-comments, Comment0, Comment1
+            assert len(children) == 3
+            assert children[0].id == "btn-more-comments"
+            assert isinstance(children[1], CommentBlock)
+            assert isinstance(children[2], CommentBlock)
+
+    @pytest.mark.asyncio
+    async def test_more_comments_button_at_end(self):
+        """More comments button at offset=len(comments) should appear after all comments."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(2)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=5,
+            omitted_comments_offset=2,  # offset == len(comments)
+            omitted_comment_likes=10,
+        )
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            from freefood.widgets.post import CommentBlock
+
+            children = list(app.query_one(PostBlock).query("CommentBlock, #btn-more-comments"))
+
+            # Order should be: Comment0, Comment1, btn-more-comments
+            assert len(children) == 3
+            assert isinstance(children[0], CommentBlock)
+            assert isinstance(children[1], CommentBlock)
+            assert children[2].id == "btn-more-comments"
+
+    @pytest.mark.asyncio
+    async def test_no_more_comments_button_when_omitted_is_zero(self):
+        """No more comments button should appear when omittedComments is 0."""
+        from textual.app import App
+        from textual.css.query import NoMatches
+
+        # Even with offset set, should not show button when omittedComments=0
+        comments = [make_comment(id=f"c{i}") for i in range(3)]
+        post = make_post(
+            comments=comments,
+            omitted_comments=0,
+            omitted_comments_offset=1,  # This should be ignored
+        )
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            with pytest.raises(NoMatches):
+                app.query_one("#btn-more-comments")

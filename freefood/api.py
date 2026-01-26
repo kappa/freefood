@@ -116,6 +116,8 @@ class FreeFeedAPI:
                     updated_at=datetime.fromtimestamp(int(p["updatedAt"]) / 1000),
                     comments=post_comments,
                     omitted_comments=p.get("omittedComments", 0),
+                    omitted_comments_offset=p.get("omittedCommentsOffset", 0),
+                    omitted_comment_likes=p.get("omittedCommentLikes", 0),
                     omitted_likes=p.get("omittedLikes", 0),
                     likes=post_likes,
                     is_liked=p.get("hasOwnLike", False),

@@ -90,6 +90,8 @@ def test_post_creation():
         updated_at=now,
         comments=[],
         omitted_comments=0,
+        omitted_comments_offset=0,
+        omitted_comment_likes=0,
         omitted_likes=0,
         likes=[],
     )
@@ -125,6 +127,8 @@ def test_post_with_comments():
         updated_at=now,
         comments=[comment],
         omitted_comments=5,
+        omitted_comments_offset=0,
+        omitted_comment_likes=15,
         omitted_likes=10,
         likes=[commenter],
     )
