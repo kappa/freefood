@@ -278,20 +278,26 @@ class PostBlock(Widget, can_focus=True):
                     yield Static("@unknown")
 
                 if self.post.direct_recipients:
-                    yield Static(" -> ")
-                    for idx, recipient in enumerate(self.post.direct_recipients):
-                        if idx > 0:
-                            yield Static(", ")
-                        recipient_btn = Button(
-                            f"@{recipient.username}",
-                            id=build_user_link_id(
-                                "header", recipient.type, recipient.username
-                            ),
-                            classes="user-link",
+                    if self.post_mode:
+                        yield Static(" -> ")
+                        for idx, recipient in enumerate(self.post.direct_recipients):
+                            if idx > 0:
+                                yield Static(", ")
+                            recipient_btn = Button(
+                                f"@{recipient.username}",
+                                id=build_user_link_id(
+                                    "header", recipient.type, recipient.username
+                                ),
+                                classes="user-link",
+                            )
+                            recipient_btn.can_focus = self.post_mode
+                            yield recipient_btn
+                        yield Static(":")
+                    else:
+                        recipients = ", ".join(
+                            f"@{u.username}" for u in self.post.direct_recipients
                         )
-                        recipient_btn.can_focus = self.post_mode
-                        yield recipient_btn
-                    yield Static(":")
+                        yield Static(f" -> {recipients}:")
                 elif self.post.groups:
                     yield Static(" wrote in ")
                     for idx, group in enumerate(self.post.groups):

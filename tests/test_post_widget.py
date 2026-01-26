@@ -196,6 +196,29 @@ class TestPostBlockFormatting:
         header = widget._format_header()
         assert header == "@alice -> @bob, @carol:"
 
+
+class TestDirectRecipientsInFeedMode:
+    """Tests for direct recipient rendering in feed mode."""
+
+    @pytest.mark.asyncio
+    async def test_direct_recipients_render_as_text_in_feed_mode(self):
+        """Direct recipients should render as text when not in post mode."""
+        from textual.app import App
+        from textual.widgets import Static
+
+        author = make_user(username="alice")
+        recipient = make_user(id="u2", username="bob")
+        post = make_post(author=author, groups=[], direct_recipients=[recipient])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            statics = [str(s.content) for s in app.query(Static)]
+            assert any("@bob" in text for text in statics)
+
     def test_format_body_short(self):
         """_format_body should return full body when short."""
         post = make_post(body="Short body text")
@@ -753,6 +776,25 @@ class TestUserLinkSpacing:
             app = pilot.app
             button = app.query_one("#user-link-header-user-alice", Button)
             assert button.region.width <= len("@alice") + 2
+
+    @pytest.mark.asyncio
+    async def test_direct_recipient_link_is_visible(self):
+        """Direct recipient link should render with non-zero width."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        author = make_user(username="alice")
+        recipient = make_user(id="u2", username="bob")
+        post = make_post(author=author, groups=[], direct_recipients=[recipient])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            button = app.query_one("#user-link-header-user-bob", Button)
+            assert button.region.width > 0
 
 
 class TestPostBlockLikeButtonLabel:
