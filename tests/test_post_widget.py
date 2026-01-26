@@ -605,6 +605,68 @@ class TestPostBlockUserLinks:
             app.query_one("#user-link-like-user-carol", Button)
 
 
+class TestPostBlockLayout:
+    """Tests for non-expanding layout containers."""
+
+    @pytest.mark.asyncio
+    async def test_post_header_uses_horizontal_group(self):
+        """Post header should use a non-expanding horizontal container."""
+        from textual.app import App
+        from textual.containers import HorizontalGroup
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#post-header", HorizontalGroup)
+
+    @pytest.mark.asyncio
+    async def test_post_likes_uses_horizontal_group(self):
+        """Post likes should use a non-expanding horizontal container."""
+        from textual.app import App
+        from textual.containers import HorizontalGroup
+
+        likers = [make_user(username="bob")]
+        post = make_post(likes=likers)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#post-likes", HorizontalGroup)
+
+    @pytest.mark.asyncio
+    async def test_comment_uses_group_containers(self):
+        """Comment block should use non-expanding containers."""
+        from textual.app import App
+        from textual.containers import HorizontalGroup, VerticalGroup
+
+        author = make_user(username="bob")
+        comment = Comment(
+            id="c1",
+            body="Nice post",
+            author=author,
+            created_at=datetime.now(),
+            likes=0,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#comment-container", VerticalGroup)
+            app.query_one("#comment-meta", HorizontalGroup)
+
+
 class TestPostBlockLikeButtonLabel:
     """Tests for Like button label based on is_liked state."""
 

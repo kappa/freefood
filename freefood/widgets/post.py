@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from textual.app import ComposeResult
-from textual.containers import Vertical, Horizontal
+from textual.containers import Horizontal, HorizontalGroup, Vertical, VerticalGroup
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static, Button
@@ -87,12 +87,12 @@ class CommentBlock(Widget):
         if self.highlight_terms:
             likes_str = escape(likes_str)
 
-        with Vertical():
+        with VerticalGroup(id="comment-container"):
             yield Static(
                 f"{likes_str} {body}",
                 markup=bool(self.highlight_terms),
             )
-            with Horizontal():
+            with HorizontalGroup(id="comment-meta"):
                 yield Static("-- ")
                 if self.comment.author is not None:
                     author_btn = Button(
@@ -251,7 +251,7 @@ class PostBlock(Widget, can_focus=True):
         """Create post widgets."""
         with Vertical():
             # Header
-            with Horizontal(classes="post-header"):
+            with HorizontalGroup(id="post-header", classes="post-header"):
                 author = self.post.author
                 if author is not None:
                     author_btn = Button(
@@ -414,7 +414,7 @@ class PostBlock(Widget, can_focus=True):
             return
 
         displayed = likes[:3]
-        with Horizontal(classes="post-likes"):
+        with HorizontalGroup(id="post-likes", classes="post-likes"):
             yield Static("♥ ")
             for idx, user in enumerate(displayed):
                 btn = Button(
