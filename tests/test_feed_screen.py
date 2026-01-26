@@ -361,3 +361,65 @@ class TestUserFeedHeader:
 
             header = screen.query_one("#feed-header", Static)
             assert "@bob" in str(header.content)
+
+    @pytest.mark.asyncio
+    async def test_user_feed_header_includes_screen_name(self):
+        """User feed header should include screen name when available."""
+        from textual.app import App
+        from textual.widgets import Static
+
+        author = make_user(username="bob", screen_name="Bob Builder")
+        posts = [make_post(id="p1", author=author, body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            header = screen.query_one("#feed-header", Static)
+            assert "Bob Builder" in str(header.content)
+
+    @pytest.mark.asyncio
+    async def test_group_feed_header_includes_screen_name(self):
+        """Group feed header should include screen name when available."""
+        from textual.app import App
+        from textual.widgets import Static
+
+        group = make_user(id="g1", username="news", screen_name="News Group", user_type="group")
+        post = make_post(id="p1", body="Group post")
+        post.groups = [group]
+        posts = [post]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.GROUP_FEED, current_target="news")
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            header = screen.query_one("#feed-header", Static)
+            assert "News Group" in str(header.content)

@@ -147,7 +147,7 @@ class FeedScreen(Screen):
 
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
-                    header_text = f"@{self.state.current_target}"
+                    header_text = self._feed_header_text(self.posts)
                     container.mount(Static(header_text, id="feed-header"))
 
             if not self.posts:
@@ -165,6 +165,29 @@ class FeedScreen(Screen):
             container.mount(
                 Static(f"Failed to load: {e}\nPress F5 to retry", classes="error")
             )
+
+    def _feed_header_text(self, posts: list[Post]) -> str:
+        """Build header text for user/group feeds."""
+        target = self.state.current_target or ""
+        screen_name = None
+
+        if self.state.current_view == View.USER_FEED:
+            for post in posts:
+                if post.author and post.author.username == target:
+                    screen_name = post.author.screen_name
+                    break
+        elif self.state.current_view == View.GROUP_FEED:
+            for post in posts:
+                for group in post.groups:
+                    if group.username == target:
+                        screen_name = group.screen_name
+                        break
+                if screen_name:
+                    break
+
+        if screen_name and screen_name != target:
+            return f"@{target} - {screen_name}"
+        return f"@{target}"
 
     def action_focus_menu(self) -> None:
         """Focus the menu bar."""
