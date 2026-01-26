@@ -69,6 +69,55 @@ class TestComposeBlockCollapsedState:
             # Should now be expanded
             assert compose.is_expanded is True
 
+    @pytest.mark.asyncio
+    async def test_enter_in_placeholder_expands_widget(self):
+        """Pressing Enter in the placeholder should expand the widget."""
+        from freefood.widgets.compose import ComposeBlock
+
+        class TestApp(App):
+            def compose(self):
+                yield ComposeBlock()
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            compose = app.query_one(ComposeBlock)
+
+            # Initially collapsed
+            assert compose.is_expanded is False
+
+            # Focus and press Enter
+            placeholder = app.query_one("#compose-placeholder")
+            placeholder.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should now be expanded
+            assert compose.is_expanded is True
+
+    @pytest.mark.asyncio
+    async def test_textarea_focused_after_expansion(self):
+        """TextArea should be focused after expansion."""
+        from freefood.widgets.compose import ComposeBlock
+        from textual.widgets import TextArea
+
+        class TestApp(App):
+            def compose(self):
+                yield ComposeBlock()
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            compose = app.query_one(ComposeBlock)
+
+            # Focus placeholder and press Enter to expand
+            placeholder = app.query_one("#compose-placeholder")
+            placeholder.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # TextArea should be focused
+            textarea = app.query_one("#compose-body", TextArea)
+            assert app.focused is textarea
+
 
 class TestComposeBlockExpandedState:
     """Tests for ComposeBlock in expanded state."""

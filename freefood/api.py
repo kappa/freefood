@@ -10,11 +10,12 @@ from .models import Comment, Post, User, Notification
 class FreeFeedAPI:
     """Async client for FreeFeed API."""
 
-    BASE_URL = "https://freefeed.net"
+    DEFAULT_BASE_URL = "https://freefeed.net"
 
-    def __init__(self, token: str) -> None:
-        """Initialize API client with auth token."""
+    def __init__(self, token: str, base_url: str | None = None) -> None:
+        """Initialize API client with auth token and optional base URL."""
         self.token = token
+        self.base_url = base_url or self.DEFAULT_BASE_URL
         self.current_user: User | None = None
         self._client: httpx.AsyncClient | None = None
 
@@ -22,7 +23,7 @@ class FreeFeedAPI:
         """Get or create HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                base_url=self.BASE_URL,
+                base_url=self.base_url,
                 headers={"Authorization": f"Bearer {self.token}"},
                 timeout=30.0,
             )

@@ -404,3 +404,18 @@ class FeedScreen(Screen):
         menu = self.query_one(MenuBar)
         menu.set_view(view)
         await self.refresh_content()
+
+    async def on_compose_block_post_requested(
+        self, message: ComposeBlock.PostRequested
+    ) -> None:
+        """Handle post creation request."""
+        try:
+            await self.app.api.create_post(message.body, message.feeds)
+            # Reset compose block
+            compose = self.query_one(ComposeBlock)
+            compose.reset()
+            self.notify("Posted!")
+            # Refresh feed to show new post
+            await self.refresh_content()
+        except Exception as e:
+            self.notify(f"Failed to post: {e}", severity="error")

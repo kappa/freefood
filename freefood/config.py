@@ -45,8 +45,14 @@ def get_token() -> str | None:
     return config.get("auth", "token", fallback=None)
 
 
+def get_base_url() -> str:
+    """Get API base URL (defaults to https://freefeed.net)."""
+    config = load_config()
+    return config.get("auth", "base_url", fallback="https://freefeed.net")
+
+
 def save_token(token: str, username: str) -> None:
-    """Save auth token and username."""
+    """Save auth token and username, preserving other settings."""
     config = load_config()
     if "auth" not in config:
         config["auth"] = {}

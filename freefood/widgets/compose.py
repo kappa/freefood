@@ -2,7 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import HorizontalGroup
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button, Input, TextArea
@@ -28,8 +28,8 @@ class ComposeBlock(Widget, can_focus=True):
     }
 
     ComposeBlock #compose-body {
-        min-height: 3;
-        max-height: 10;
+        height: 5;
+        border: none;
     }
 
     ComposeBlock #compose-post-to {
@@ -37,15 +37,16 @@ class ComposeBlock(Widget, can_focus=True):
         height: 1;
     }
 
-    ComposeBlock Horizontal {
+    ComposeBlock .compose-actions {
         height: auto;
         margin-top: 1;
-        align: right middle;
     }
 
-    ComposeBlock Horizontal Button {
-        margin-left: 1;
-        min-width: 10;
+    ComposeBlock .compose-actions Button {
+        min-width: 8;
+        height: 1;
+        border: none;
+        margin-right: 1;
     }
 
     ComposeBlock #compose-post {
@@ -78,15 +79,34 @@ class ComposeBlock(Widget, can_focus=True):
             # Expanded state: full compose UI
             yield TextArea(id="compose-body")
             yield Input(placeholder="Post to...", id="compose-post-to")
-            with Horizontal():
+            with HorizontalGroup(classes="compose-actions"):
                 yield Button("Cancel", id="compose-cancel")
                 yield Button("Post", id="compose-post")
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Expand when user starts typing in placeholder."""
         if not self.is_expanded and event.input.id == "compose-placeholder":
-            self.is_expanded = True
-            self.refresh(recompose=True)
+            self._expand()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Expand when user presses Enter in placeholder."""
+        if not self.is_expanded and event.input.id == "compose-placeholder":
+            self._expand()
+
+    def _expand(self) -> None:
+        """Expand the compose block and focus the textarea."""
+        self.is_expanded = True
+        self.refresh(recompose=True)
+        # Focus the textarea after recompose
+        self.call_after_refresh(self._focus_textarea)
+
+    def _focus_textarea(self) -> None:
+        """Focus the textarea after expansion."""
+        try:
+            textarea = self.query_one("#compose-body", TextArea)
+            textarea.focus()
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""

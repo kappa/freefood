@@ -5,7 +5,7 @@ from textual.binding import Binding
 from textual.widgets import Footer
 
 from freefood.api import FreeFeedAPI
-from freefood.config import get_token, save_token
+from freefood.config import get_base_url, get_token, save_token
 from freefood.screens.auth import AuthScreen
 from freefood.screens.feed import FeedScreen
 from freefood.state import AppState
@@ -41,7 +41,8 @@ class FreeFoodApp(App):
 
     async def _try_connect(self, token: str) -> None:
         """Try to connect with token."""
-        self.api = FreeFeedAPI(token)
+        base_url = get_base_url()
+        self.api = FreeFeedAPI(token, base_url)
         try:
             user = await self.api.validate_token()
             save_token(token, user.username)

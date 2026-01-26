@@ -14,10 +14,16 @@ def test_api_client_initialization():
     assert api.current_user is None
 
 
-def test_api_client_base_url():
-    """API client should have correct base URL."""
+def test_api_client_default_base_url():
+    """API client should use default base URL when not specified."""
     api = FreeFeedAPI("test-token")
-    assert api.BASE_URL == "https://freefeed.net"
+    assert api.base_url == "https://freefeed.net"
+
+
+def test_api_client_custom_base_url():
+    """API client should use custom base URL when specified."""
+    api = FreeFeedAPI("test-token", base_url="https://staging.freefeed.net")
+    assert api.base_url == "https://staging.freefeed.net"
 
 
 @pytest.mark.asyncio
