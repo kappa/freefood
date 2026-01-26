@@ -147,6 +147,25 @@ class FreeFeedAPI:
         response.raise_for_status()
         return self._denormalize_posts(response.json())
 
+    async def get_user_subscription_status(self, username: str) -> bool:
+        """Return whether current user is subscribed to the given user."""
+        client = await self._get_client()
+        response = await client.get(f"/v4/users/{username}")
+        response.raise_for_status()
+        data = response.json()
+
+        for key in ("youAreSubscribed", "youSubscribed", "isSubscribed", "subscribed"):
+            if key in data:
+                return bool(data[key])
+
+        user_data = data.get("users")
+        if isinstance(user_data, dict):
+            for key in ("youAreSubscribed", "youSubscribed", "isSubscribed", "subscribed"):
+                if key in user_data:
+                    return bool(user_data[key])
+
+        return False
+
     async def get_directs(self, offset: int = 0, limit: int = 30) -> list[Post]:
         """Fetch direct messages."""
         client = await self._get_client()
@@ -209,6 +228,18 @@ class FreeFeedAPI:
         response.raise_for_status()
         posts = self._denormalize_posts(response.json())
         return posts[0]
+
+    async def subscribe(self, username: str) -> None:
+        """Subscribe to a user."""
+        client = await self._get_client()
+        response = await client.post(f"/v4/users/{username}/subscribe")
+        response.raise_for_status()
+
+    async def unsubscribe(self, username: str) -> None:
+        """Unsubscribe from a user."""
+        client = await self._get_client()
+        response = await client.post(f"/v4/users/{username}/unsubscribe")
+        response.raise_for_status()
 
     async def update_post(self, post_id: str, body: str) -> Post:
         """Update a post."""

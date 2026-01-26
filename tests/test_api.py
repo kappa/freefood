@@ -502,8 +502,50 @@ async def test_create_post():
 
         post = await api.create_post("Hello!", ["news"])
 
-        assert post.body == "Hello!"
-        mock_client.post.assert_called_once_with(
-            "/v4/posts",
-            json={"post": {"body": "Hello!"}, "meta": {"feeds": ["news"]}},
-        )
+    assert post.body == "Hello!"
+    mock_client.post.assert_called_once_with(
+        "/v4/posts",
+        json={"post": {"body": "Hello!"}, "meta": {"feeds": ["news"]}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_user_subscription_status_reads_top_level_flag():
+    """get_user_subscription_status should read top-level flags."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {"youAreSubscribed": True}
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        result = await api.get_user_subscription_status("alice")
+
+        assert result is True
+        mock_client.get.assert_called_once_with("/v4/users/alice")
+
+
+@pytest.mark.asyncio
+async def test_get_user_subscription_status_reads_user_object_flag():
+    """get_user_subscription_status should read flags from user object."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {"users": {"youAreSubscribed": False}}
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        result = await api.get_user_subscription_status("alice")
+
+        assert result is False
+        mock_client.get.assert_called_once_with("/v4/users/alice")

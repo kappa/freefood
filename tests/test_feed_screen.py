@@ -424,6 +424,89 @@ class TestUserFeedHeader:
             header = screen.query_one("#feed-header", Static)
             assert "News Group" in str(header.content)
 
+    @pytest.mark.asyncio
+    async def test_user_feed_shows_subscribe_button(self):
+        """User feed should show subscribe button based on status."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        posts = [make_post(id="p1", body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return False
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            button = screen.query_one("#btn-subscribe", Button)
+            assert button.label.plain == "Subscribe"
+
+    @pytest.mark.asyncio
+    async def test_subscribe_button_toggles(self):
+        """Subscribe button should toggle label and call API."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        posts = [make_post(id="p1", body="User post")]
+
+        class FakeAPI:
+            def __init__(self):
+                self.subscribed = True
+                self.subscribe_calls: list[str] = []
+                self.unsubscribe_calls: list[str] = []
+
+            async def get_user_feed(self, username: str):
+                return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return self.subscribed
+
+            async def subscribe(self, username: str) -> None:
+                self.subscribe_calls.append(username)
+                self.subscribed = True
+
+            async def unsubscribe(self, username: str) -> None:
+                self.unsubscribe_calls.append(username)
+                self.subscribed = False
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            button = screen.query_one("#btn-subscribe", Button)
+            assert button.label.plain == "Unsubscribe"
+
+            button.press()
+            await pilot.pause()
+
+            assert app.api.unsubscribe_calls == ["bob"]
+            assert button.label.plain == "Subscribe"
+
 
 class TestPostModeEscape:
     """Tests for escape behavior in post mode."""

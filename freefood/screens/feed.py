@@ -2,9 +2,9 @@
 
 
 from textual.app import ComposeResult
-from textual.containers import ScrollableContainer
+from textual.containers import ScrollableContainer, HorizontalGroup
 from textual.screen import Screen
-from textual.widgets import Static
+from textual.widgets import Static, Button
 
 from freefood.models import View, Post
 from freefood.state import AppState
@@ -103,6 +103,7 @@ class FeedScreen(Screen):
         super().__init__()
         self._state = state  # Will use app.state if None
         self.posts: list[Post] = []
+        self.is_subscribed: bool = False
 
     @property
     def state(self) -> AppState:
@@ -149,7 +150,22 @@ class FeedScreen(Screen):
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
                     header_text = self._feed_header_text(self.posts)
-                    container.mount(Static(header_text, id="feed-header"))
+                    if self.state.current_view == View.USER_FEED:
+                        self.is_subscribed = await api.get_user_subscription_status(
+                            self.state.current_target
+                        )
+                        label = "Unsubscribe" if self.is_subscribed else "Subscribe"
+                        header_row = HorizontalGroup(
+                            Static(header_text, id="feed-header"),
+                            Button(label, id="btn-subscribe"),
+                            id="feed-header-row",
+                        )
+                    else:
+                        header_row = HorizontalGroup(
+                            Static(header_text, id="feed-header"),
+                            id="feed-header-row",
+                        )
+                    container.mount(header_row)
 
             if not self.posts:
                 container.mount(Static("No posts found", classes="loading"))
@@ -323,6 +339,28 @@ class FeedScreen(Screen):
                 if block.post.id == post.id:
                     block.refresh(recompose=True)
                     break
+        except Exception as e:
+            self.notify(f"Failed: {e}", severity="error")
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle subscribe/unsubscribe button."""
+        if event.button.id != "btn-subscribe":
+            return
+
+        if self.state.current_target is None:
+            return
+
+        try:
+            if self.is_subscribed:
+                await self.app.api.unsubscribe(self.state.current_target)
+                self.is_subscribed = False
+                event.button.label = "Subscribe"
+                self.notify(f"Unsubscribed from @{self.state.current_target}")
+            else:
+                await self.app.api.subscribe(self.state.current_target)
+                self.is_subscribed = True
+                event.button.label = "Unsubscribe"
+                self.notify(f"Subscribed to @{self.state.current_target}")
         except Exception as e:
             self.notify(f"Failed: {e}", severity="error")
 
