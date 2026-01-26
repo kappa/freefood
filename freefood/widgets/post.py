@@ -123,6 +123,15 @@ class PostBlock(Widget, can_focus=True):
         text-style: bold;
     }
 
+    PostBlock .user-link {
+        border: none;
+        height: 1;
+        padding: 0 1 0 0;
+        background: transparent;
+        color: $accent;
+        text-style: underline;
+    }
+
     PostBlock .post-body {
         margin: 1 0;
     }
@@ -198,6 +207,14 @@ class PostBlock(Widget, can_focus=True):
             self.post = post
             super().__init__()
 
+    class UserClicked(Message):
+        """Request to navigate to a user or group feed."""
+
+        def __init__(self, username: str, user_type: str) -> None:
+            self.username = username
+            self.user_type = user_type
+            super().__init__()
+
     def __init__(self, post: Post, highlight_terms: list[str] | None = None) -> None:
         """Initialize post widget."""
         super().__init__()
@@ -211,7 +228,34 @@ class PostBlock(Widget, can_focus=True):
         """Create post widgets."""
         with Vertical():
             # Header
-            yield Static(self._format_header(), classes="post-header")
+            with Horizontal(classes="post-header"):
+                author = self.post.author
+                if author is not None:
+                    author_btn = Button(
+                        f"@{author.username}",
+                        id=self._user_link_id(author.type, author.username),
+                        classes="user-link",
+                    )
+                    author_btn.can_focus = False
+                    yield author_btn
+                else:
+                    yield Static("@unknown")
+
+                if self.post.groups:
+                    yield Static(" wrote in ")
+                    for idx, group in enumerate(self.post.groups):
+                        if idx > 0:
+                            yield Static(", ")
+                        group_btn = Button(
+                            f"@{group.username}",
+                            id=self._user_link_id(group.type, group.username),
+                            classes="user-link",
+                        )
+                        group_btn.can_focus = False
+                        yield group_btn
+                    yield Static(":")
+                else:
+                    yield Static(" wrote:")
 
             # Body
             yield Static(
@@ -267,6 +311,10 @@ class PostBlock(Widget, can_focus=True):
             groups = ", ".join(f"@{g.username}" for g in self.post.groups)
             return f"{author} wrote in {groups}:"
         return f"{author} wrote:"
+
+    def _user_link_id(self, user_type: str, username: str) -> str:
+        """Build a stable id for user/group links."""
+        return f"user-link-{user_type}-{username}"
 
     def _format_body(self) -> str:
         """Format post body with truncation."""
@@ -343,6 +391,13 @@ class PostBlock(Widget, can_focus=True):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
+        if event.button.id and event.button.id.startswith("user-link-"):
+            remainder = event.button.id[len("user-link-") :]
+            if "-" in remainder:
+                user_type, username = remainder.split("-", 1)
+                self.post_message(self.UserClicked(username, user_type))
+            return
+
         if event.button.id == "show-more-body":
             self.body_expanded = True
             self.refresh(recompose=True)

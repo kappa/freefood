@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from freefood.models import Post, User
+from freefood.models import Post, User, View
 from freefood.screens.feed import FeedScreen
 from freefood.state import AppState
 from freefood.widgets.post import PostBlock
@@ -281,3 +281,50 @@ class TestAutoSelectionOnScroll:
             )
             # And the focused widget should be a PostBlock
             assert isinstance(focused, PostBlock), f"Focus should be on a PostBlock, got {type(focused)}"
+
+
+class TestUserFeedNavigation:
+    """Tests for navigating to user feeds from post header."""
+
+    @pytest.mark.asyncio
+    async def test_user_clicked_switches_to_user_feed(self):
+        """UserClicked should navigate to the user feed and load posts."""
+        from textual.app import App
+
+        home_posts = [make_post(id="p1", body="Home post")]
+        user_posts = [make_post(id="p2", body="User post")]
+
+        class FakeAPI:
+            def __init__(self):
+                self.user_calls: list[str] = []
+
+            async def get_home_feed(self):
+                return home_posts
+
+            async def get_user_feed(self, username: str):
+                self.user_calls.append(username)
+                return user_posts
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.HOME)
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            await screen.on_post_block_user_clicked(
+                PostBlock.UserClicked("bob", "user")
+            )
+            await pilot.pause()
+
+            assert app.state.current_view == View.USER_FEED
+            assert app.state.current_target == "bob"
+            assert app.api.user_calls == ["bob"]
+            assert screen.query(PostBlock).first() is not None

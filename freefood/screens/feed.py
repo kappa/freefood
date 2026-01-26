@@ -267,3 +267,13 @@ class FeedScreen(Screen):
                     break
         except Exception as e:
             self.notify(f"Failed: {e}", severity="error")
+
+    async def on_post_block_user_clicked(
+        self, message: PostBlock.UserClicked
+    ) -> None:
+        """Handle navigation to a user or group feed."""
+        view = View.GROUP_FEED if message.user_type == "group" else View.USER_FEED
+        self.state.navigate_to(view, target=message.username)
+        menu = self.query_one(MenuBar)
+        menu.set_view(view)
+        await self.refresh_content()

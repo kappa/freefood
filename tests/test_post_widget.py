@@ -81,6 +81,12 @@ class TestPostBlockMessages:
         msg = PostBlock.Selected(post)
         assert msg.post is post
 
+    def test_user_clicked_message_exists(self):
+        """UserClicked message should be defined and instantiable."""
+        msg = PostBlock.UserClicked("alice", "user")
+        assert msg.username == "alice"
+        assert msg.user_type == "user"
+
 
 class TestPostBlockBindings:
     """Tests for PostBlock keyboard bindings."""
@@ -526,6 +532,28 @@ class TestPostBlockOnButtonPressed:
         msg = mock_post_message.call_args[0][0]
         assert isinstance(msg, PostBlock.HideRequested)
         assert msg.post is post
+
+    def test_user_link_emits_user_clicked(self):
+        """on_button_pressed should emit UserClicked when a user link is pressed."""
+        from unittest.mock import Mock, patch
+
+        from textual.widgets import Button
+
+        widget = PostBlock(make_post())
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "user-link-user-alice"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "post_message") as mock_post_message:
+            widget.on_button_pressed(mock_event)
+
+        mock_post_message.assert_called_once()
+        msg = mock_post_message.call_args[0][0]
+        assert isinstance(msg, PostBlock.UserClicked)
+        assert msg.username == "alice"
+        assert msg.user_type == "user"
 
 
 class TestPostBlockLikeButtonLabel:
