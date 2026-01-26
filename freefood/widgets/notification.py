@@ -13,6 +13,10 @@ from freefood.widgets.post import build_user_link_id
 class NotificationBlock(Widget, can_focus=True):
     """Widget displaying a single notification."""
 
+    BINDINGS = [
+        ("enter", "enter_post_mode", "Enter notification"),
+    ]
+
     DEFAULT_CSS = """
     NotificationBlock {
         border: solid $primary;
@@ -21,8 +25,16 @@ class NotificationBlock(Widget, can_focus=True):
         height: auto;
     }
 
+    NotificationBlock > Vertical {
+        height: auto;
+    }
+
     NotificationBlock:focus {
         border: solid $accent;
+    }
+
+    NotificationBlock.post-mode {
+        border: double $accent;
     }
 
     NotificationBlock .user-link {
@@ -63,6 +75,7 @@ class NotificationBlock(Widget, can_focus=True):
     def __init__(self, notification: Notification) -> None:
         super().__init__()
         self.notification = notification
+        self.post_mode = False
 
     def _format_tail(self) -> str:
         """Format notification text after username."""
@@ -90,7 +103,7 @@ class NotificationBlock(Widget, can_focus=True):
                 id=build_user_link_id("notification", user.type, user.username),
                 classes="user-link",
             )
-            user_btn.can_focus = True
+            user_btn.can_focus = self.post_mode
             tail = self._format_tail()
         else:
             user_btn = Button("@unknown", classes="user-link")
@@ -103,7 +116,7 @@ class NotificationBlock(Widget, can_focus=True):
                 yield Static(f" {tail}")
             if self.notification.post_id:
                 btn = Button("View post", id="btn-view-post", classes="post-link")
-                btn.can_focus = True
+                btn.can_focus = self.post_mode
                 yield btn
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -117,3 +130,61 @@ class NotificationBlock(Widget, can_focus=True):
             return
         if event.button.id == "btn-view-post" and self.notification.post_id:
             self.post_message(self.PostClicked(self.notification.post_id))
+
+    def action_enter_post_mode(self) -> None:
+        """Enter post mode, making buttons focusable."""
+        self.post_mode = True
+        self.add_class("post-mode")
+        self.refresh(recompose=True)
+        self.call_after_refresh(self._focus_first_button)
+
+    def action_exit_post_mode(self) -> None:
+        """Exit post mode, return focus to this block."""
+        self.post_mode = False
+        self.remove_class("post-mode")
+        self.refresh(recompose=True)
+        self.focus()
+
+    def _focus_first_button(self) -> None:
+        """Focus the first button in this notification."""
+        for button in self.query(Button):
+            if button.can_focus:
+                button.focus()
+                return
+
+    def on_key(self, event) -> None:
+        """Handle key events for notification post mode navigation."""
+        if not self.post_mode:
+            return
+        focused = self.screen.focused
+        if focused is None or focused is self:
+            return
+        if not self.is_ancestor_of(focused):
+            return
+
+        focusable = [w for w in self.query("*") if w.can_focus and w is not self]
+
+        if event.key in ("up", "left", "shift+tab"):
+            if focused in focusable:
+                idx = focusable.index(focused)
+                if idx > 0:
+                    focusable[idx - 1].focus()
+            event.stop()
+        elif event.key in ("down", "right", "tab"):
+            if focused in focusable:
+                idx = focusable.index(focused)
+                if idx < len(focusable) - 1:
+                    focusable[idx + 1].focus()
+            event.stop()
+        elif event.key == "escape":
+            self.action_exit_post_mode()
+            event.stop()
+
+    def is_ancestor_of(self, widget) -> bool:
+        """Check if this widget is an ancestor of the given widget."""
+        parent = widget.parent
+        while parent is not None:
+            if parent is self:
+                return True
+            parent = parent.parent
+        return False
