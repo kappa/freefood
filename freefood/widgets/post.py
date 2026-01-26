@@ -207,6 +207,10 @@ class PostBlock(Widget, can_focus=True):
         width: 2;
     }
 
+    PostBlock .header-sep {
+        width: auto;
+    }
+
     PostBlock Button:focus {
         background: $accent;
     }
@@ -278,31 +282,25 @@ class PostBlock(Widget, can_focus=True):
                     yield Static("@unknown")
 
                 if self.post.direct_recipients:
-                    if self.post_mode:
-                        yield Static(" -> ")
-                        for idx, recipient in enumerate(self.post.direct_recipients):
-                            if idx > 0:
-                                yield Static(", ")
-                            recipient_btn = Button(
-                                f"@{recipient.username}",
-                                id=build_user_link_id(
-                                    "header", recipient.type, recipient.username
-                                ),
-                                classes="user-link",
-                            )
-                            recipient_btn.can_focus = self.post_mode
-                            yield recipient_btn
-                        yield Static(":")
-                    else:
-                        recipients = ", ".join(
-                            f"@{u.username}" for u in self.post.direct_recipients
+                    yield Static(" -> ", classes="header-sep")
+                    for idx, recipient in enumerate(self.post.direct_recipients):
+                        if idx > 0:
+                            yield Static(", ", classes="header-sep")
+                        recipient_btn = Button(
+                            f"@{recipient.username}",
+                            id=build_user_link_id(
+                                "header", recipient.type, recipient.username
+                            ),
+                            classes="user-link",
                         )
-                        yield Static(f" -> {recipients}:")
+                        recipient_btn.can_focus = self.post_mode
+                        yield recipient_btn
+                    yield Static(":", classes="header-sep")
                 elif self.post.groups:
-                    yield Static(" wrote in ")
+                    yield Static(" wrote in ", classes="header-sep")
                     for idx, group in enumerate(self.post.groups):
                         if idx > 0:
-                            yield Static(", ")
+                            yield Static(", ", classes="header-sep")
                         group_btn = Button(
                             f"@{group.username}",
                             id=build_user_link_id("header", group.type, group.username),
@@ -310,9 +308,9 @@ class PostBlock(Widget, can_focus=True):
                         )
                         group_btn.can_focus = self.post_mode
                         yield group_btn
-                    yield Static(":")
+                    yield Static(":", classes="header-sep")
                 else:
-                    yield Static(" wrote:")
+                    yield Static(" wrote:", classes="header-sep")
 
             # Body
             yield Static(

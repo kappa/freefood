@@ -197,14 +197,14 @@ class TestPostBlockFormatting:
         assert header == "@alice -> @bob, @carol:"
 
 
-class TestDirectRecipientsInFeedMode:
-    """Tests for direct recipient rendering in feed mode."""
+class TestPostBlockFormattingInFeedMode:
+    """Tests for formatting behavior in feed mode."""
 
     @pytest.mark.asyncio
-    async def test_direct_recipients_render_as_text_in_feed_mode(self):
-        """Direct recipients should render as text when not in post mode."""
+    async def test_direct_recipients_render_as_buttons_in_feed_mode(self):
+        """Direct recipients should render as buttons in feed mode."""
         from textual.app import App
-        from textual.widgets import Static
+        from textual.widgets import Button
 
         author = make_user(username="alice")
         recipient = make_user(id="u2", username="bob")
@@ -216,8 +216,8 @@ class TestDirectRecipientsInFeedMode:
 
         async with TestApp().run_test(size=(80, 20)) as pilot:
             app = pilot.app
-            statics = [str(s.content) for s in app.query(Static)]
-            assert any("@bob" in text for text in statics)
+            button = app.query_one("#user-link-header-user-bob", Button)
+            assert button.label.plain == "@bob"
 
     def test_format_body_short(self):
         """_format_body should return full body when short."""
@@ -779,7 +779,7 @@ class TestUserLinkSpacing:
 
     @pytest.mark.asyncio
     async def test_direct_recipient_link_is_visible(self):
-        """Direct recipient link should render with non-zero width."""
+        """Direct recipient link should render in feed mode."""
         from textual.app import App
         from textual.widgets import Button
 
