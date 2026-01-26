@@ -24,9 +24,6 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 1: Search view
-- Section 2: User/group feed navigation
-- Section 3: Subscribe/unsubscribe
 - Section 4: Notifications view
 - Section 5: Directs view
 - Section 6: Compose block (create posts)
@@ -87,6 +84,8 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 **Priority:** High - simple read-only feature, good foundation
 
+**Status:** ✓ Completed
+
 ### Tasks
 
 **1.1 SearchScreen skeleton**
@@ -124,6 +123,8 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 **Priority:** High - natural follow-up to search, enables browsing
 
+**Status:** ✓ Completed
+
 ### Tasks
 
 **2.1 Clickable usernames in post header**
@@ -154,6 +155,8 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 ## Section 3: Subscribe/Unsubscribe
 
 **Priority:** Medium - extends user feed functionality
+
+**Status:** ✓ Completed
 
 ### Tasks
 
