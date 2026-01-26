@@ -4,10 +4,10 @@ from datetime import datetime
 
 import pytest
 
-from freefood.models import Post, User, View
+from freefood.models import Post, User, View, Comment
 from freefood.screens.feed import FeedScreen
 from freefood.state import AppState
-from freefood.widgets.post import PostBlock
+from freefood.widgets.post import PostBlock, CommentBlock
 
 
 def make_user(
@@ -507,3 +507,158 @@ class TestPostModeEscape:
 
             assert post_block.post_mode is False
             assert app.focused is post_block
+
+
+class TestExpandCommentsFocus:
+    """Tests for focusing comments after expansion."""
+
+    @pytest.mark.asyncio
+    async def test_expand_comments_focuses_first_comment(self):
+        """After expanding, focus should move to the first comment."""
+        from textual.app import App
+
+        base_post = make_post(id="p1", body="Post")
+        base_post.omitted_comments = 1
+        base_post.omitted_comments_offset = 0
+        base_post.comments = []
+
+        full_post = make_post(id="p1", body="Post")
+        full_post.comments = [
+            Comment(
+                id="c1",
+                body="First comment",
+                author=make_user(username="bob"),
+                created_at=datetime.now(),
+                likes=0,
+            ),
+            Comment(
+                id="c2",
+                body="Second comment",
+                author=make_user(username="carol"),
+                created_at=datetime.now(),
+                likes=0,
+            ),
+        ]
+
+        class FakeAPI:
+            async def get_post(self, post_id: str):
+                assert post_id == "p1"
+                return full_post
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState()
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            container = screen.query_one("#feed-container")
+            container.remove_children()
+            await container.mount(PostBlock(base_post))
+            await pilot.pause()
+
+            post_block = container.query(PostBlock).first()
+            assert post_block is not None
+            app.set_focus(post_block)
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            await screen.on_post_block_expand_comments(
+                PostBlock.ExpandComments(base_post)
+            )
+            await pilot.pause(0.2)
+
+            assert post_block.post_mode is True
+            comment = post_block.query(CommentBlock).first()
+            assert comment is not None
+            assert comment.can_focus is True
+
+            focused = app.focused
+            assert isinstance(focused, CommentBlock)
+
+    @pytest.mark.asyncio
+    async def test_expand_comments_focuses_first_new_comment(self):
+        """After expanding, focus should move to first newly loaded comment."""
+        from textual.app import App
+
+        base_post = make_post(id="p1", body="Post")
+        base_post.omitted_comments = 2
+        base_post.omitted_comments_offset = 1
+        base_post.comments = [
+            Comment(
+                id="c1",
+                body="Visible comment",
+                author=make_user(username="alice"),
+                created_at=datetime.now(),
+                likes=0,
+            )
+        ]
+
+        full_post = make_post(id="p1", body="Post")
+        full_post.comments = [
+            Comment(
+                id="c1",
+                body="Visible comment",
+                author=make_user(username="alice"),
+                created_at=datetime.now(),
+                likes=0,
+            ),
+            Comment(
+                id="c2",
+                body="New comment 1",
+                author=make_user(username="bob"),
+                created_at=datetime.now(),
+                likes=0,
+            ),
+            Comment(
+                id="c3",
+                body="New comment 2",
+                author=make_user(username="carol"),
+                created_at=datetime.now(),
+                likes=0,
+            ),
+        ]
+
+        class FakeAPI:
+            async def get_post(self, post_id: str):
+                assert post_id == "p1"
+                return full_post
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState()
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            container = screen.query_one("#feed-container")
+            container.remove_children()
+            await container.mount(PostBlock(base_post))
+            await pilot.pause()
+
+            post_block = container.query(PostBlock).first()
+            assert post_block is not None
+            app.set_focus(post_block)
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            await screen.on_post_block_expand_comments(
+                PostBlock.ExpandComments(base_post)
+            )
+            await pilot.pause(0.2)
+
+            focused = app.focused
+            assert isinstance(focused, CommentBlock)
+            assert focused.comment.id == "c2"

@@ -410,6 +410,7 @@ class PostBlock(Widget, can_focus=True):
                 highlight_terms=self.highlight_terms,
             )
 
+
         # If offset equals len(comments) and button not yet yielded, button goes at the end
         if omitted > 0 and not self.comments_expanded and offset >= len(comments) and not button_yielded:
             btn = Button(
@@ -466,6 +467,15 @@ class PostBlock(Widget, can_focus=True):
             self.post_message(self.LikeRequested(self.post))
         elif event.button.id == "btn-hide":
             self.post_message(self.HideRequested(self.post))
+
+    def focus_comment_at(self, index: int) -> bool:
+        """Focus the comment at a given index if available."""
+        comments = list(self.query(CommentBlock))
+        if comments:
+            idx = max(0, min(index, len(comments) - 1))
+            self.app.set_focus(comments[idx])
+            return True
+        return False
 
     def action_enter_post_mode(self) -> None:
         """Enter post mode, making buttons focusable."""

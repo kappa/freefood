@@ -1,5 +1,6 @@
 """Feed screen for displaying posts."""
 
+
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.screen import Screen
@@ -216,6 +217,9 @@ class FeedScreen(Screen):
             current = current.parent
         return None
 
+
+
+
     def action_refresh(self) -> None:
         """Refresh feed."""
         self.run_worker(self.refresh_content())
@@ -269,6 +273,12 @@ class FeedScreen(Screen):
                         block.post = full_post
                         block.comments_expanded = True
                         block.refresh(recompose=True)
+                        focus_index = 0
+                        if message.post.omitted_comments > 0:
+                            focus_index = message.post.omitted_comments_offset
+                        self.app.set_timer(
+                            0.05, lambda: block.focus_comment_at(focus_index)
+                        )
                         break
         except Exception as e:
             self.notify(f"Failed to load comments: {e}", severity="error")
