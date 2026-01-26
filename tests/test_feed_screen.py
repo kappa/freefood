@@ -305,6 +305,9 @@ class TestUserFeedNavigation:
                 self.user_calls.append(username)
                 return user_posts
 
+            async def get_user_subscription_status(self, username: str):
+                return False
+
         class TestApp(App):
             def __init__(self):
                 super().__init__()
@@ -345,6 +348,9 @@ class TestUserFeedHeader:
             async def get_user_feed(self, username: str):
                 return posts
 
+            async def get_user_subscription_status(self, username: str):
+                return False
+
         class TestApp(App):
             def __init__(self):
                 super().__init__()
@@ -374,6 +380,9 @@ class TestUserFeedHeader:
         class FakeAPI:
             async def get_user_feed(self, username: str):
                 return posts
+
+            async def get_user_subscription_status(self, username: str):
+                return False
 
         class TestApp(App):
             def __init__(self):
