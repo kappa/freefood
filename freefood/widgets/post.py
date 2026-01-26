@@ -9,6 +9,8 @@ from textual.widget import Widget
 from textual.widgets import Static, Button
 
 from freefood.models import Post, Comment
+from freefood.search import highlight_text
+from rich.markup import escape
 
 
 def format_time_ago(dt: datetime) -> str:
@@ -49,24 +51,40 @@ class CommentBlock(Widget):
 
     MAX_COMMENT_LINES = 10
 
-    def __init__(self, comment: Comment, post_mode: bool = False) -> None:
+    def __init__(
+        self,
+        comment: Comment,
+        post_mode: bool = False,
+        highlight_terms: list[str] | None = None,
+    ) -> None:
         """Initialize comment widget."""
         super().__init__()
         self.comment = comment
         self.can_focus = post_mode
+        self.highlight_terms = highlight_terms or []
 
-    def compose(self) -> ComposeResult:
-        """Create comment widgets."""
+    def _format_body(self) -> str:
+        """Format comment body with truncation and optional highlighting."""
         lines = self.comment.body.split("\n")
         if len(lines) > self.MAX_COMMENT_LINES:
             body = "\n".join(lines[: self.MAX_COMMENT_LINES]) + "\n[show more...]"
         else:
             body = self.comment.body
 
+        if self.highlight_terms:
+            return highlight_text(body, self.highlight_terms)
+        return body
+
+    def compose(self) -> ComposeResult:
+        """Create comment widgets."""
+        body = self._format_body()
         likes_str = f"[{self.comment.likes}♥]" if self.comment.likes else "[0♥]"
         author_name = self.comment.author.username if self.comment.author else "unknown"
+        if self.highlight_terms:
+            likes_str = escape(likes_str)
+            author_name = escape(author_name)
         text = f"{likes_str} {body} -- @{author_name}"
-        yield Static(text)
+        yield Static(text, markup=bool(self.highlight_terms))
 
 
 class PostBlock(Widget, can_focus=True):
@@ -180,13 +198,14 @@ class PostBlock(Widget, can_focus=True):
             self.post = post
             super().__init__()
 
-    def __init__(self, post: Post) -> None:
+    def __init__(self, post: Post, highlight_terms: list[str] | None = None) -> None:
         """Initialize post widget."""
         super().__init__()
         self.post = post
         self.body_expanded = False
         self.comments_expanded = False
         self.post_mode = False  # When True, buttons are focusable
+        self.highlight_terms = highlight_terms or []
 
     def compose(self) -> ComposeResult:
         """Create post widgets."""
@@ -195,7 +214,11 @@ class PostBlock(Widget, can_focus=True):
             yield Static(self._format_header(), classes="post-header")
 
             # Body
-            yield Static(self._format_body(), classes="post-body")
+            yield Static(
+                self._format_body(),
+                classes="post-body",
+                markup=bool(self.highlight_terms),
+            )
             if self._body_is_truncated():
                 btn = Button("Show more...", id="show-more-body", classes="show-more")
                 btn.can_focus = self.post_mode
@@ -250,8 +273,13 @@ class PostBlock(Widget, can_focus=True):
         lines = self.post.body.split("\n")
         if len(lines) > self.MAX_BODY_LINES and not self.body_expanded:
             truncated = "\n".join(lines[: self.MAX_BODY_LINES])
-            return f"{truncated}\n[show more...]"
-        return self.post.body
+            body = f"{truncated}\n[show more...]"
+        else:
+            body = self.post.body
+
+        if self.highlight_terms:
+            return highlight_text(body, self.highlight_terms)
+        return body
 
     def _format_likes(self) -> str:
         """Format likes line."""
@@ -297,7 +325,11 @@ class PostBlock(Widget, can_focus=True):
                 btn.can_focus = self.post_mode
                 yield btn
                 button_yielded = True
-            yield CommentBlock(comment, post_mode=self.post_mode)
+            yield CommentBlock(
+                comment,
+                post_mode=self.post_mode,
+                highlight_terms=self.highlight_terms,
+            )
 
         # If offset equals len(comments) and button not yet yielded, button goes at the end
         if omitted > 0 and not self.comments_expanded and offset >= len(comments) and not button_yielded:

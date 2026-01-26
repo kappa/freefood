@@ -174,6 +174,14 @@ class FeedScreen(Screen):
 
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
         """Handle view change from menu."""
+        if message.view == View.SEARCH:
+            if self.state.current_view != View.SEARCH:
+                self.state.navigate_to(View.SEARCH)
+            from freefood.screens.search import SearchScreen
+
+            self.app.push_screen(SearchScreen(self.state))
+            return
+
         if message.view != self.state.current_view:
             self.state.navigate_to(message.view)
             menu = self.query_one(MenuBar)
@@ -188,10 +196,15 @@ class FeedScreen(Screen):
             self.state.current_target = entry.target
             if entry.query:
                 self.state.search_query = entry.query
-            menu = self.query_one(MenuBar)
-            menu.set_view(entry.view)
-            self.run_worker(self.refresh_content())
-            # TODO: Restore scroll_position after content loads
+            if entry.view == View.SEARCH:
+                from freefood.screens.search import SearchScreen
+
+                self.app.push_screen(SearchScreen(self.state))
+            else:
+                menu = self.query_one(MenuBar)
+                menu.set_view(entry.view)
+                self.run_worker(self.refresh_content())
+                # TODO: Restore scroll_position after content loads
         else:
             self.notify("No history")
 
