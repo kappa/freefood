@@ -570,3 +570,67 @@ async def test_get_user_subscription_status_reads_you_can_unsubscribe():
 
         assert result is True
         mock_client.get.assert_called_once_with("/v4/users/alice")
+
+
+@pytest.mark.asyncio
+async def test_get_notifications_denormalizes_users():
+    """get_notifications should parse notifications and attach users."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {
+        "Notifications": [
+            {
+                "id": "n1",
+                "eventId": "e1",
+                "event_type": "post_like",
+                "date": "2026-01-25T21:03:38.187Z",
+                "created_user_id": "u1",
+                "post_id": "p1",
+            }
+        ],
+        "users": [
+            {
+                "id": "u1",
+                "username": "alice",
+                "screenName": "Alice",
+                "type": "user",
+            }
+        ],
+    }
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        notifications = await api.get_notifications()
+
+        assert len(notifications) == 1
+        notif = notifications[0]
+        assert notif.event_type == "post_like"
+        assert notif.created_user is not None
+        assert notif.created_user.username == "alice"
+
+
+@pytest.mark.asyncio
+async def test_get_unread_notifications_count_reads_whoami():
+    """get_unread_notifications_count should read whoami."""
+    api = FreeFeedAPI("test-token")
+
+    mock_response = {"unreadNotificationsNumber": 5, "unreadDirectsNumber": 2}
+
+    with patch.object(api, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_response_obj = MagicMock()
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status = MagicMock()
+        mock_client.get = AsyncMock(return_value=mock_response_obj)
+        mock_get_client.return_value = mock_client
+
+        count = await api.get_unread_notifications_count()
+
+        assert count == 5
+        mock_client.get.assert_called_once_with("/v4/users/whoami")

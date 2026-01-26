@@ -2,7 +2,7 @@
 
 
 from textual.app import ComposeResult
-from textual.containers import ScrollableContainer, HorizontalGroup
+from textual.containers import ScrollableContainer
 from textual.screen import Screen
 from textual.widgets import Static, Button
 
@@ -161,6 +161,13 @@ class FeedScreen(Screen):
 
             container.remove_children()
 
+            try:
+                count = await api.get_unread_notifications_count()
+                menu = self.query_one(MenuBar)
+                menu.set_notifications_count(count)
+            except Exception:
+                pass
+
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
                     header_text = self._feed_header_text(self.posts)
@@ -253,6 +260,13 @@ class FeedScreen(Screen):
             from freefood.screens.search import SearchScreen
 
             self.app.push_screen(SearchScreen(self.state))
+            return
+        if message.view == View.NOTIFICATIONS:
+            if self.state.current_view != View.NOTIFICATIONS:
+                self.state.navigate_to(View.NOTIFICATIONS)
+            from freefood.screens.notifications import NotificationsScreen
+
+            self.app.push_screen(NotificationsScreen(self.state))
             return
 
         if message.view != self.state.current_view:

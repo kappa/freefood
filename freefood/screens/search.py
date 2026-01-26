@@ -143,6 +143,13 @@ class SearchScreen(Screen):
             search_input.focus()
             return
 
+        if message.view == View.NOTIFICATIONS:
+            self.state.navigate_to(View.NOTIFICATIONS)
+            from freefood.screens.notifications import NotificationsScreen
+
+            self.app.push_screen(NotificationsScreen(self.state))
+            return
+
         self.state.navigate_to(message.view)
         self._return_to_feed()
 
@@ -158,6 +165,10 @@ class SearchScreen(Screen):
                 search_input = self.query_one("#search-input", Input)
                 search_input.value = self.state.search_query
                 self.run_worker(self.refresh_results())
+            elif entry.view == View.NOTIFICATIONS:
+                from freefood.screens.notifications import NotificationsScreen
+
+                self.app.push_screen(NotificationsScreen(self.state))
             else:
                 self._return_to_feed()
         else:

@@ -853,3 +853,38 @@ class TestExpandCommentsFocus:
             focused = app.focused
             assert isinstance(focused, CommentBlock)
             assert focused.comment.id == "c2"
+
+
+class TestFeedScreenMenuNavigation:
+    """Tests for FeedScreen menu navigation."""
+
+    @pytest.mark.asyncio
+    async def test_notifications_menu_opens_notifications_screen(self):
+        """Selecting Notifications should open NotificationsScreen."""
+        from textual.app import App
+        from freefood.widgets.menu import MenuBar
+
+        class FakeAPI:
+            async def get_home_feed(self):
+                return []
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.HOME)
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.screen
+            await pilot.pause()
+
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.NOTIFICATIONS))
+            await pilot.pause()
+
+            from freefood.screens.notifications import NotificationsScreen
+
+            assert isinstance(app.screen, NotificationsScreen)

@@ -4,7 +4,7 @@ from datetime import datetime
 
 import httpx
 
-from .models import Comment, Post, User
+from .models import Comment, Post, User, Notification
 
 
 class FreeFeedAPI:
@@ -74,6 +74,8 @@ class FreeFeedAPI:
     def _denormalize_posts(self, data: dict) -> list[Post]:
         """Convert normalized API response to Post objects."""
         users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
+        for group in data.get("groups", []):
+            users_by_id[group["id"]] = self._parse_user(group)
         comments_by_id = {
             c["id"]: self._parse_comment(c, users_by_id)
             for c in data.get("comments", [])
@@ -177,6 +179,51 @@ class FreeFeedAPI:
         )
         response.raise_for_status()
         return self._denormalize_posts(response.json())
+
+    async def get_notifications(
+        self, offset: int = 0, limit: int = 30
+    ) -> list[Notification]:
+        """Fetch notifications."""
+        client = await self._get_client()
+        response = await client.get(
+            "/v4/notifications", params={"offset": offset, "limit": limit}
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
+        notifications = []
+        for item in data.get("Notifications", []):
+            created_user_id = item.get("created_user_id", item.get("createdBy"))
+            created_user = users_by_id.get(created_user_id)
+            if "date" in item and item["date"]:
+                created_at = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+            else:
+                created_at = datetime.fromtimestamp(int(item.get("createdAt", "0")) / 1000)
+            notifications.append(
+                Notification(
+                    id=item.get("id", ""),
+                    event_id=item.get("eventId", item.get("event_id", "")),
+                    event_type=item.get("eventType", item.get("event_type", "")),
+                    date=created_at,
+                    created_user=created_user,
+                    post_id=item.get(
+                        "postId", item.get("post_id", item.get("target_post_id"))
+                    ),
+                    comment_id=item.get(
+                        "commentId", item.get("comment_id", item.get("target_comment_id"))
+                    ),
+                )
+            )
+        return notifications
+
+    async def get_unread_notifications_count(self) -> int:
+        """Fetch unread notifications count."""
+        client = await self._get_client()
+        response = await client.get("/v4/users/whoami")
+        response.raise_for_status()
+        data = response.json()
+        return int(data.get("unreadNotificationsNumber", 0))
 
     async def search(self, query: str, offset: int = 0, limit: int = 30) -> list[Post]:
         """Search posts."""

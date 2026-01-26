@@ -24,7 +24,6 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 4: Notifications view
 - Section 5: Directs view
 - Section 6: Compose block (create posts)
 - Section 7: Comment creation
@@ -192,9 +191,11 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 **Priority:** Medium - different layout, important feature
 
+**Status:** ✓ Completed
+
 ### Tasks
 
-**4.1 NotificationBlock widget**
+**4.1 NotificationBlock widget** ✓
 - Create `freefood/widgets/notification.py`
 - Different from PostBlock - shows notification event
 - Format varies by `event_type`:
@@ -206,26 +207,26 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
   - `subscription`: `@carol subscribed to you`
   - And others as discovered
 
-**4.2 Notification model**
+**4.2 Notification model** ✓
 - Add `Notification` dataclass to `models.py`
 - Fields: `id`, `event_id`, `event_type`, `date`, `created_user`, `post_id`, `comment_id`
 - Parse from API response (key is `Notifications` with capital N)
 
-**4.3 NotificationsScreen**
+**4.3 NotificationsScreen** ✓
 - Create `freefood/screens/notifications.py`
 - Layout: List of NotificationBlocks in ScrollableContainer
 - No compose block
 
-**4.4 API integration**
+**4.4 API integration** ✓
 - Add `api.get_notifications()` method
 - Denormalize: join user IDs to user objects
 - Handle pagination (offset/limit)
 
-**4.5 Clickable elements in notifications**
+**4.5 Clickable elements in notifications** ✓
 - Click username → navigate to user feed
 - Click post reference → navigate to single post view or scroll to in feed
 
-**4.6 Unread indicator (optional)**
+**4.6 Unread indicator (optional)** ✓
 - Show unread count on Notifications menu button
 - API provides `unreadNotificationsNumber` in whoami
 

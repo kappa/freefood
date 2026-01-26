@@ -171,3 +171,22 @@ def test_history_entry_for_search():
         query="python",
     )
     assert entry.query == "python"
+
+
+def test_notification_creation():
+    """Notification should store basic fields."""
+    from freefood.models import Notification
+
+    notif = Notification(
+        id="n1",
+        event_id="e1",
+        event_type="post_like",
+        date=datetime.now(),
+        created_user=User(id="u1", username="alice", screen_name="Alice", type="user"),
+        post_id="p1",
+        comment_id=None,
+    )
+
+    assert notif.id == "n1"
+    assert notif.event_type == "post_like"
+    assert notif.post_id == "p1"

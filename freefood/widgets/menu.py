@@ -60,6 +60,7 @@ class MenuBar(Widget):
         """Initialize menu bar."""
         super().__init__()
         self.current_view = current_view
+        self.notifications_count: int | None = None
 
     def compose(self) -> ComposeResult:
         """Create menu buttons."""
@@ -90,6 +91,9 @@ class MenuBar(Widget):
             else:
                 button.remove_class("selected")
 
+        if self.notifications_count is not None:
+            self.set_notifications_count(self.notifications_count)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         button_to_view = {
@@ -112,6 +116,15 @@ class MenuBar(Widget):
         """Set current view externally."""
         self.current_view = view
         self._update_selection()
+
+    def set_notifications_count(self, count: int) -> None:
+        """Update notifications button label with unread count."""
+        self.notifications_count = count
+        label = "Notifications"
+        if count > 0:
+            label = f"Notifications ({count})"
+        button = self.query_one("#notifications-button", Button)
+        button.label = label
 
     def focus_current_view_button(self) -> None:
         """Focus the button for the current view."""

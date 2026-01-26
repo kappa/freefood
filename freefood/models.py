@@ -50,6 +50,19 @@ class Post:
     is_own: bool = False
 
 
+@dataclass
+class Notification:
+    """A notification event."""
+
+    id: str
+    event_id: str
+    event_type: str
+    date: datetime
+    created_user: User | None
+    post_id: str | None = None
+    comment_id: str | None = None
+
+
 class View(Enum):
     """Application view types."""
 
