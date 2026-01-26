@@ -320,7 +320,7 @@ For new post (compose block at top):
    https://freefeed.net/settings/app-tokens/create?title=FreeFood%20(Console%20Client)&scopes=read-my-info%20read-my-files%20read-feeds%20read-users-info%20read-realtime%20manage-my-files%20manage-notifications%20manage-posts%20manage-my-feeds%20manage-profile%20manage-groups%20manage-subscription-requests
    ```
 4. Prompt: "Paste your token here:"
-5. Validate token via `GET /v2/users/whoami`
+5. Validate token via `GET /v4/users/whoami`
 6. Save to config file
 7. Proceed to Home feed
 
@@ -379,27 +379,27 @@ Display inline with retry hint:
 
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
-| Validate token | GET | `/v2/users/whoami` |
-| Home feed | GET | `/v2/timelines/home` |
-| User timeline | GET | `/v2/timelines/{username}` |
-| Notifications | GET | `/v2/notifications` |
-| Directs | GET | `/v2/timelines/filter/directs` |
-| Search | GET | `/v2/search?q={query}` |
-| Single post | GET | `/v2/posts/{id}?maxComments=all` |
-| Create post | POST | `/v2/posts` |
-| Update post | PUT | `/v2/posts/{id}` |
-| Delete post | DELETE | `/v2/posts/{id}` |
-| Like post | POST | `/v2/posts/{id}/like` |
-| Unlike post | POST | `/v2/posts/{id}/unlike` |
-| Hide post | POST | `/v2/posts/{id}/hide` |
-| Unhide post | POST | `/v2/posts/{id}/unhide` |
-| Create comment | POST | `/v2/comments` |
-| Update comment | PUT | `/v2/comments/{id}` |
-| Delete comment | DELETE | `/v2/comments/{id}` |
-| Like comment | POST | `/v2/comments/{id}/like` |
-| Unlike comment | POST | `/v2/comments/{id}/unlike` |
-| Subscribe | POST | `/v2/users/{username}/subscribe` |
-| Unsubscribe | POST | `/v2/users/{username}/unsubscribe` |
+| Validate token | GET | `/v4/users/whoami` |
+| Home feed | GET | `/v4/timelines/home` |
+| User timeline | GET | `/v4/timelines/{username}` |
+| Notifications | GET | `/v4/notifications` |
+| Directs | GET | `/v4/timelines/filter/directs` |
+| Search | GET | `/v4/search?q={query}` |
+| Single post | GET | `/v4/posts/{id}?maxComments=all` |
+| Create post | POST | `/v4/posts` |
+| Update post | PUT | `/v4/posts/{id}` |
+| Delete post | DELETE | `/v4/posts/{id}` |
+| Like post | POST | `/v4/posts/{id}/like` |
+| Unlike post | POST | `/v4/posts/{id}/unlike` |
+| Hide post | POST | `/v4/posts/{id}/hide` |
+| Unhide post | POST | `/v4/posts/{id}/unhide` |
+| Create comment | POST | `/v4/comments` |
+| Update comment | PUT | `/v4/comments/{id}` |
+| Delete comment | DELETE | `/v4/comments/{id}` |
+| Like comment | POST | `/v4/comments/{id}/like` |
+| Unlike comment | POST | `/v4/comments/{id}/unlike` |
+| Subscribe | POST | `/v4/users/{username}/subscribe` |
+| Unsubscribe | POST | `/v4/users/{username}/unsubscribe` |
 
 ### Denormalization
 
@@ -416,11 +416,11 @@ API returns normalized data with separate arrays for posts, comments, users. The
 
 | Endpoint Type | `posts` field type |
 |---------------|-------------------|
-| Timeline endpoints (`/v2/timelines/*`, `/v2/search`) | **List** of post objects |
-| Single post endpoint (`/v2/posts/{id}`) | **Single dict** (not a list) |
-| `/v2/users/whoami` | `users` is a **single dict** (not a list) |
+| Timeline endpoints (`/v4/timelines/*`, `/v4/search`) | **List** of post objects |
+| Single post endpoint (`/v4/posts/{id}`) | **Single dict** (not a list) |
+| `/v4/users/whoami` | `users` is a **single dict** (not a list) |
 
-Example: For `/v2/posts/{id}`:
+Example: For `/v4/posts/{id}`:
 ```json
 {
   "posts": {"id": "abc", "body": "...", ...},  // dict, NOT a list

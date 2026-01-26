@@ -37,7 +37,7 @@ class FreeFeedAPI:
     async def validate_token(self) -> User:
         """Validate token and return current user."""
         client = await self._get_client()
-        response = await client.get("/v2/users/whoami")
+        response = await client.get("/v4/users/whoami")
         response.raise_for_status()
         data = response.json()
         self.current_user = self._parse_user(data["users"])
@@ -129,7 +129,7 @@ class FreeFeedAPI:
         """Fetch home timeline."""
         client = await self._get_client()
         response = await client.get(
-            "/v2/timelines/home", params={"offset": offset, "limit": limit}
+            "/v4/timelines/home", params={"offset": offset, "limit": limit}
         )
         response.raise_for_status()
         return self._denormalize_posts(response.json())
@@ -140,7 +140,7 @@ class FreeFeedAPI:
         """Fetch user timeline."""
         client = await self._get_client()
         response = await client.get(
-            f"/v2/timelines/{username}", params={"offset": offset, "limit": limit}
+            f"/v4/timelines/{username}", params={"offset": offset, "limit": limit}
         )
         response.raise_for_status()
         return self._denormalize_posts(response.json())
@@ -149,7 +149,7 @@ class FreeFeedAPI:
         """Fetch direct messages."""
         client = await self._get_client()
         response = await client.get(
-            "/v2/timelines/filter/directs", params={"offset": offset, "limit": limit}
+            "/v4/timelines/filter/directs", params={"offset": offset, "limit": limit}
         )
         response.raise_for_status()
         return self._denormalize_posts(response.json())
@@ -158,7 +158,7 @@ class FreeFeedAPI:
         """Search posts."""
         client = await self._get_client()
         response = await client.get(
-            "/v2/search", params={"q": query, "offset": offset, "limit": limit}
+            "/v4/search", params={"q": query, "offset": offset, "limit": limit}
         )
         response.raise_for_status()
         return self._denormalize_posts(response.json())
@@ -167,7 +167,7 @@ class FreeFeedAPI:
         """Fetch single post with all comments."""
         client = await self._get_client()
         response = await client.get(
-            f"/v2/posts/{post_id}", params={"maxComments": "all", "maxLikes": "all"}
+            f"/v4/posts/{post_id}", params={"maxComments": "all", "maxLikes": "all"}
         )
         response.raise_for_status()
         posts = self._denormalize_posts(response.json())
@@ -177,32 +177,32 @@ class FreeFeedAPI:
     async def like_post(self, post_id: str) -> None:
         """Like a post."""
         client = await self._get_client()
-        response = await client.post(f"/v2/posts/{post_id}/like")
+        response = await client.post(f"/v4/posts/{post_id}/like")
         response.raise_for_status()
 
     async def unlike_post(self, post_id: str) -> None:
         """Unlike a post."""
         client = await self._get_client()
-        response = await client.post(f"/v2/posts/{post_id}/unlike")
+        response = await client.post(f"/v4/posts/{post_id}/unlike")
         response.raise_for_status()
 
     async def hide_post(self, post_id: str) -> None:
         """Hide a post."""
         client = await self._get_client()
-        response = await client.post(f"/v2/posts/{post_id}/hide")
+        response = await client.post(f"/v4/posts/{post_id}/hide")
         response.raise_for_status()
 
     async def unhide_post(self, post_id: str) -> None:
         """Unhide a post."""
         client = await self._get_client()
-        response = await client.post(f"/v2/posts/{post_id}/unhide")
+        response = await client.post(f"/v4/posts/{post_id}/unhide")
         response.raise_for_status()
 
     async def create_post(self, body: str, feeds: list[str]) -> Post:
         """Create a new post."""
         client = await self._get_client()
         response = await client.post(
-            "/v2/posts", json={"post": {"body": body}, "meta": {"feeds": feeds}}
+            "/v4/posts", json={"post": {"body": body}, "meta": {"feeds": feeds}}
         )
         response.raise_for_status()
         posts = self._denormalize_posts(response.json())
@@ -212,7 +212,7 @@ class FreeFeedAPI:
         """Update a post."""
         client = await self._get_client()
         response = await client.put(
-            f"/v2/posts/{post_id}", json={"post": {"body": body}}
+            f"/v4/posts/{post_id}", json={"post": {"body": body}}
         )
         response.raise_for_status()
         posts = self._denormalize_posts(response.json())
@@ -221,7 +221,7 @@ class FreeFeedAPI:
     async def delete_post(self, post_id: str) -> None:
         """Delete a post."""
         client = await self._get_client()
-        response = await client.delete(f"/v2/posts/{post_id}")
+        response = await client.delete(f"/v4/posts/{post_id}")
         response.raise_for_status()
 
     # Comment actions
@@ -229,7 +229,7 @@ class FreeFeedAPI:
         """Create a comment on a post."""
         client = await self._get_client()
         response = await client.post(
-            "/v2/comments", json={"comment": {"body": body, "postId": post_id}}
+            "/v4/comments", json={"comment": {"body": body, "postId": post_id}}
         )
         response.raise_for_status()
         data = response.json()
@@ -241,37 +241,37 @@ class FreeFeedAPI:
         """Update a comment."""
         client = await self._get_client()
         response = await client.put(
-            f"/v2/comments/{comment_id}", json={"comment": {"body": body}}
+            f"/v4/comments/{comment_id}", json={"comment": {"body": body}}
         )
         response.raise_for_status()
 
     async def delete_comment(self, comment_id: str) -> None:
         """Delete a comment."""
         client = await self._get_client()
-        response = await client.delete(f"/v2/comments/{comment_id}")
+        response = await client.delete(f"/v4/comments/{comment_id}")
         response.raise_for_status()
 
     async def like_comment(self, comment_id: str) -> None:
         """Like a comment."""
         client = await self._get_client()
-        response = await client.post(f"/v2/comments/{comment_id}/like")
+        response = await client.post(f"/v4/comments/{comment_id}/like")
         response.raise_for_status()
 
     async def unlike_comment(self, comment_id: str) -> None:
         """Unlike a comment."""
         client = await self._get_client()
-        response = await client.post(f"/v2/comments/{comment_id}/unlike")
+        response = await client.post(f"/v4/comments/{comment_id}/unlike")
         response.raise_for_status()
 
     # Subscription actions
     async def subscribe(self, username: str) -> None:
         """Subscribe to a user."""
         client = await self._get_client()
-        response = await client.post(f"/v2/users/{username}/subscribe")
+        response = await client.post(f"/v4/users/{username}/subscribe")
         response.raise_for_status()
 
     async def unsubscribe(self, username: str) -> None:
         """Unsubscribe from a user."""
         client = await self._get_client()
-        response = await client.post(f"/v2/users/{username}/unsubscribe")
+        response = await client.post(f"/v4/users/{username}/unsubscribe")
         response.raise_for_status()

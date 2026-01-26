@@ -48,7 +48,7 @@ async def test_validate_token_success():
         assert user.username == "testuser"
         assert user.screen_name == "Test User"
         assert api.current_user == user
-        mock_client.get.assert_called_once_with("/v2/users/whoami")
+        mock_client.get.assert_called_once_with("/v4/users/whoami")
 
 
 @pytest.mark.asyncio
@@ -147,7 +147,7 @@ async def test_get_home_feed():
         assert len(posts) == 1
         assert posts[0].body == "Test post"
         mock_client.get.assert_called_once_with(
-            "/v2/timelines/home", params={"offset": 0, "limit": 30}
+            "/v4/timelines/home", params={"offset": 0, "limit": 30}
         )
 
 
@@ -192,7 +192,7 @@ async def test_get_user_feed():
         assert posts[0].body == "User post"
         assert posts[0].author.username == "alice"
         mock_client.get.assert_called_once_with(
-            "/v2/timelines/alice", params={"offset": 0, "limit": 30}
+            "/v4/timelines/alice", params={"offset": 0, "limit": 30}
         )
 
 
@@ -236,7 +236,7 @@ async def test_get_directs():
         assert len(posts) == 1
         assert posts[0].body == "Private message"
         mock_client.get.assert_called_once_with(
-            "/v2/timelines/filter/directs", params={"offset": 0, "limit": 30}
+            "/v4/timelines/filter/directs", params={"offset": 0, "limit": 30}
         )
 
 
@@ -280,7 +280,7 @@ async def test_search():
         assert len(posts) == 1
         assert posts[0].body == "Found post with keyword"
         mock_client.get.assert_called_once_with(
-            "/v2/search", params={"q": "keyword", "offset": 0, "limit": 30}
+            "/v4/search", params={"q": "keyword", "offset": 0, "limit": 30}
         )
 
 
@@ -336,7 +336,7 @@ async def test_get_post():
         assert len(post.comments) == 1
         assert post.comments[0].body == "A comment"
         mock_client.get.assert_called_once_with(
-            "/v2/posts/post-123", params={"maxComments": "all", "maxLikes": "all"}
+            "/v4/posts/post-123", params={"maxComments": "all", "maxLikes": "all"}
         )
 
 
@@ -447,7 +447,7 @@ async def test_like_post():
 
         await api.like_post("post-123")
 
-        mock_client.post.assert_called_once_with("/v2/posts/post-123/like")
+        mock_client.post.assert_called_once_with("/v4/posts/post-123/like")
 
 
 @pytest.mark.asyncio
@@ -464,7 +464,7 @@ async def test_unlike_post():
 
         await api.unlike_post("post-123")
 
-        mock_client.post.assert_called_once_with("/v2/posts/post-123/unlike")
+        mock_client.post.assert_called_once_with("/v4/posts/post-123/unlike")
 
 
 @pytest.mark.asyncio
@@ -504,6 +504,6 @@ async def test_create_post():
 
         assert post.body == "Hello!"
         mock_client.post.assert_called_once_with(
-            "/v2/posts",
+            "/v4/posts",
             json={"post": {"body": "Hello!"}, "meta": {"feeds": ["news"]}},
         )
