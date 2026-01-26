@@ -90,6 +90,11 @@ class FeedScreen(Screen):
         height: 1fr;
         padding: 0 1;
     }
+
+    #feed-header {
+        text-style: bold;
+        margin: 0 0 1 0;
+    }
     """
 
     def __init__(self, state: AppState | None = None) -> None:
@@ -139,6 +144,11 @@ class FeedScreen(Screen):
                 self.posts = []
 
             container.remove_children()
+
+            if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
+                if self.state.current_target:
+                    header_text = f"@{self.state.current_target}"
+                    container.mount(Static(header_text, id="feed-header"))
 
             if not self.posts:
                 container.mount(Static("No posts found", classes="loading"))

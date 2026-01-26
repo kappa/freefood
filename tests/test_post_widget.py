@@ -542,7 +542,7 @@ class TestPostBlockOnButtonPressed:
         widget = PostBlock(make_post())
 
         mock_button = Mock(spec=Button)
-        mock_button.id = "user-link-user-alice"
+        mock_button.id = "user-link-header-user-alice"
         mock_event = Mock(spec=Button.Pressed)
         mock_event.button = mock_button
 
@@ -554,6 +554,55 @@ class TestPostBlockOnButtonPressed:
         assert isinstance(msg, PostBlock.UserClicked)
         assert msg.username == "alice"
         assert msg.user_type == "user"
+
+
+class TestPostBlockUserLinks:
+    """Tests for user link rendering in comments and likes."""
+
+    @pytest.mark.asyncio
+    async def test_comment_author_renders_user_link(self):
+        """Comment author should render as a user link button."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        author = make_user(username="bob")
+        comment = Comment(
+            id="c1",
+            body="Nice post",
+            author=author,
+            created_at=datetime.now(),
+            likes=0,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#user-link-comment-user-bob", Button)
+
+    @pytest.mark.asyncio
+    async def test_likes_render_user_links(self):
+        """Likes line should render user link buttons for visible likers."""
+        from textual.app import App
+        from textual.widgets import Button
+
+        likers = [
+            make_user(id="u1", username="bob"),
+            make_user(id="u2", username="carol"),
+        ]
+        post = make_post(likes=likers)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#user-link-like-user-bob", Button)
+            app.query_one("#user-link-like-user-carol", Button)
 
 
 class TestPostBlockLikeButtonLabel:

@@ -32,6 +32,11 @@ def format_time_ago(dt: datetime) -> str:
         return f"{days}d ago"
 
 
+def build_user_link_id(scope: str, user_type: str, username: str) -> str:
+    """Build a stable id for user/group links."""
+    return f"user-link-{scope}-{user_type}-{username}"
+
+
 class CommentBlock(Widget):
     """Widget displaying a single comment. Focusable in post mode."""
 
@@ -79,12 +84,30 @@ class CommentBlock(Widget):
         """Create comment widgets."""
         body = self._format_body()
         likes_str = f"[{self.comment.likes}♥]" if self.comment.likes else "[0♥]"
-        author_name = self.comment.author.username if self.comment.author else "unknown"
         if self.highlight_terms:
             likes_str = escape(likes_str)
-            author_name = escape(author_name)
-        text = f"{likes_str} {body} -- @{author_name}"
-        yield Static(text, markup=bool(self.highlight_terms))
+
+        with Vertical():
+            yield Static(
+                f"{likes_str} {body}",
+                markup=bool(self.highlight_terms),
+            )
+            with Horizontal():
+                yield Static("-- ")
+                if self.comment.author is not None:
+                    author_btn = Button(
+                        f"@{self.comment.author.username}",
+                        id=build_user_link_id(
+                            "comment",
+                            self.comment.author.type,
+                            self.comment.author.username,
+                        ),
+                        classes="user-link",
+                    )
+                    author_btn.can_focus = self.can_focus
+                    yield author_btn
+                else:
+                    yield Static("@unknown")
 
 
 class PostBlock(Widget, can_focus=True):
@@ -233,10 +256,10 @@ class PostBlock(Widget, can_focus=True):
                 if author is not None:
                     author_btn = Button(
                         f"@{author.username}",
-                        id=self._user_link_id(author.type, author.username),
+                        id=build_user_link_id("header", author.type, author.username),
                         classes="user-link",
                     )
-                    author_btn.can_focus = False
+                    author_btn.can_focus = self.post_mode
                     yield author_btn
                 else:
                     yield Static("@unknown")
@@ -248,10 +271,10 @@ class PostBlock(Widget, can_focus=True):
                             yield Static(", ")
                         group_btn = Button(
                             f"@{group.username}",
-                            id=self._user_link_id(group.type, group.username),
+                            id=build_user_link_id("header", group.type, group.username),
                             classes="user-link",
                         )
-                        group_btn.can_focus = False
+                        group_btn.can_focus = self.post_mode
                         yield group_btn
                     yield Static(":")
                 else:
@@ -293,8 +316,7 @@ class PostBlock(Widget, can_focus=True):
                     yield btn_delete
 
             # Likes
-            if self.post.likes:
-                yield Static(self._format_likes(), classes="post-likes")
+            yield from self._render_likes()
 
             # Comments
             yield from self._render_comments()
@@ -311,10 +333,6 @@ class PostBlock(Widget, can_focus=True):
             groups = ", ".join(f"@{g.username}" for g in self.post.groups)
             return f"{author} wrote in {groups}:"
         return f"{author} wrote:"
-
-    def _user_link_id(self, user_type: str, username: str) -> str:
-        """Build a stable id for user/group links."""
-        return f"user-link-{user_type}-{username}"
 
     def _format_body(self) -> str:
         """Format post body with truncation."""
@@ -389,12 +407,39 @@ class PostBlock(Widget, can_focus=True):
             btn.can_focus = self.post_mode
             yield btn
 
+    def _render_likes(self):
+        """Render likes line with clickable usernames."""
+        likes = self.post.likes
+        if not likes:
+            return
+
+        displayed = likes[:3]
+        with Horizontal(classes="post-likes"):
+            yield Static("♥ ")
+            for idx, user in enumerate(displayed):
+                btn = Button(
+                    f"@{user.username}",
+                    id=build_user_link_id("like", user.type, user.username),
+                    classes="user-link",
+                )
+                btn.can_focus = self.post_mode
+                yield btn
+                if idx < len(displayed) - 1:
+                    yield Static(", ")
+
+            if len(likes) <= 3:
+                yield Static(" liked this")
+            else:
+                others = len(likes) - 3 + self.post.omitted_likes
+                yield Static(f" and {others} others liked this")
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id and event.button.id.startswith("user-link-"):
             remainder = event.button.id[len("user-link-") :]
-            if "-" in remainder:
-                user_type, username = remainder.split("-", 1)
+            parts = remainder.split("-", 2)
+            if len(parts) == 3:
+                _, user_type, username = parts
                 self.post_message(self.UserClicked(username, user_type))
             return
 

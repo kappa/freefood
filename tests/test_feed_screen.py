@@ -328,3 +328,36 @@ class TestUserFeedNavigation:
             assert app.state.current_target == "bob"
             assert app.api.user_calls == ["bob"]
             assert screen.query(PostBlock).first() is not None
+
+
+class TestUserFeedHeader:
+    """Tests for user/group feed header display."""
+
+    @pytest.mark.asyncio
+    async def test_user_feed_renders_header(self):
+        """User feed should render a header with the target username."""
+        from textual.app import App
+        from textual.widgets import Static
+
+        posts = [make_post(id="p1", body="User post")]
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return posts
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            def compose(self):
+                yield FeedScreen(self.state)
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            app = pilot.app
+            screen = app.query_one(FeedScreen)
+            await pilot.pause()
+
+            header = screen.query_one("#feed-header", Static)
+            assert "@bob" in str(header.content)
