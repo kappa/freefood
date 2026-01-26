@@ -108,7 +108,7 @@ class CommentBlock(Widget):
                         ),
                         classes="user-link",
                     )
-                    author_btn.can_focus = self.can_focus
+                    author_btn.can_focus = False
                     yield author_btn
                 else:
                     yield Static("@unknown")
@@ -272,7 +272,7 @@ class PostBlock(Widget, can_focus=True):
                         id=build_user_link_id("header", author.type, author.username),
                         classes="user-link",
                     )
-                    author_btn.can_focus = self.post_mode
+                    author_btn.can_focus = False
                     yield author_btn
                 else:
                     yield Static("@unknown")
@@ -287,7 +287,7 @@ class PostBlock(Widget, can_focus=True):
                             id=build_user_link_id("header", group.type, group.username),
                             classes="user-link",
                         )
-                        group_btn.can_focus = self.post_mode
+                        group_btn.can_focus = False
                         yield group_btn
                     yield Static(":")
                 else:
@@ -436,7 +436,7 @@ class PostBlock(Widget, can_focus=True):
                     id=build_user_link_id("like", user.type, user.username),
                     classes="user-link",
                 )
-                btn.can_focus = self.post_mode
+                btn.can_focus = False
                 yield btn
                 if idx < len(displayed) - 1:
                     yield Static(", ", classes="likes-sep")
@@ -487,9 +487,10 @@ class PostBlock(Widget, can_focus=True):
 
     def _focus_first_button(self) -> None:
         """Focus the first button in this post."""
-        buttons = list(self.query(Button))
-        if buttons:
-            buttons[0].focus()
+        for button in self.query(Button):
+            if button.can_focus:
+                button.focus()
+                return
 
     def action_exit_post_mode(self) -> None:
         """Exit post mode, return focus to this post block."""
