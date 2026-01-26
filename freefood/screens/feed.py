@@ -8,6 +8,7 @@ from textual.widgets import Static, Button
 
 from freefood.models import View, Post
 from freefood.state import AppState
+from freefood.widgets.compose import ComposeBlock
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
@@ -174,6 +175,10 @@ class FeedScreen(Screen):
                 menu.set_directs_count(count)
             except Exception:
                 pass
+
+            # Show compose block for HOME and DIRECTS views
+            if self.state.current_view in (View.HOME, View.DIRECTS):
+                container.mount(ComposeBlock())
 
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:

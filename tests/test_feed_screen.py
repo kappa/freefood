@@ -923,3 +923,134 @@ class TestDirectsUnreadIndicator:
             screen = pilot.app.screen
             button = screen.query_one("#directs-button", Button)
             assert button.label.plain == "Directs (3)"
+
+
+class TestComposeBlockIntegration:
+    """Tests for ComposeBlock appearing in correct views."""
+
+    @pytest.mark.asyncio
+    async def test_compose_block_shown_in_home_view(self):
+        """ComposeBlock should appear in Home view."""
+        from textual.app import App
+        from freefood.widgets.compose import ComposeBlock
+
+        class FakeAPI:
+            async def get_home_feed(self):
+                return []
+
+            async def get_unread_notifications_count(self) -> int:
+                return 0
+
+            async def get_unread_directs_count(self) -> int:
+                return 0
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.HOME)
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.screen
+            compose_blocks = list(screen.query(ComposeBlock))
+            assert len(compose_blocks) == 1, "ComposeBlock should appear in HOME view"
+
+    @pytest.mark.asyncio
+    async def test_compose_block_shown_in_directs_view(self):
+        """ComposeBlock should appear in Directs view."""
+        from textual.app import App
+        from freefood.widgets.compose import ComposeBlock
+
+        class FakeAPI:
+            async def get_directs(self):
+                return []
+
+            async def get_unread_notifications_count(self) -> int:
+                return 0
+
+            async def get_unread_directs_count(self) -> int:
+                return 0
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.DIRECTS)
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.screen
+            compose_blocks = list(screen.query(ComposeBlock))
+            assert len(compose_blocks) == 1, "ComposeBlock should appear in DIRECTS view"
+
+    @pytest.mark.asyncio
+    async def test_compose_block_not_shown_in_user_feed_view(self):
+        """ComposeBlock should NOT appear in User feed view."""
+        from textual.app import App
+        from freefood.widgets.compose import ComposeBlock
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return []
+
+            async def get_user_subscription_status(self, username: str):
+                return False
+
+            async def get_unread_notifications_count(self) -> int:
+                return 0
+
+            async def get_unread_directs_count(self) -> int:
+                return 0
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.USER_FEED, current_target="bob")
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.screen
+            compose_blocks = list(screen.query(ComposeBlock))
+            assert len(compose_blocks) == 0, "ComposeBlock should NOT appear in USER_FEED view"
+
+    @pytest.mark.asyncio
+    async def test_compose_block_not_shown_in_group_feed_view(self):
+        """ComposeBlock should NOT appear in Group feed view."""
+        from textual.app import App
+        from freefood.widgets.compose import ComposeBlock
+
+        class FakeAPI:
+            async def get_user_feed(self, username: str):
+                return []
+
+            async def get_unread_notifications_count(self) -> int:
+                return 0
+
+            async def get_unread_directs_count(self) -> int:
+                return 0
+
+        class TestApp(App):
+            def __init__(self):
+                super().__init__()
+                self.api = FakeAPI()
+                self.state = AppState(current_view=View.GROUP_FEED, current_target="news")
+
+            def on_mount(self) -> None:
+                self.push_screen(FeedScreen(self.state))
+
+        async with TestApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            screen = pilot.app.screen
+            compose_blocks = list(screen.query(ComposeBlock))
+            assert len(compose_blocks) == 0, "ComposeBlock should NOT appear in GROUP_FEED view"
