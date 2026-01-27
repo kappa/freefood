@@ -24,7 +24,6 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 7: Comment creation
 - Section 8: Edit posts/comments
 - Section 9: Delete posts/comments
 
@@ -326,9 +325,11 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 7: Comment Creation
+## Section 7: Comment Creation ✓ COMPLETED
 
 **Priority:** High - essential interaction
+
+**Status:** ✓ Completed
 
 ### Tasks
 

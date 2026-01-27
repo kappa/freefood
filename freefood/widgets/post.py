@@ -10,6 +10,7 @@ from textual.widgets import Static, Button
 
 from freefood.models import Post, Comment
 from freefood.search import highlight_text
+from freefood.widgets.comment_compose import CommentCompose
 from rich.markup import escape
 
 
@@ -485,6 +486,8 @@ class PostBlock(Widget, can_focus=True):
         elif event.button.id == "btn-more-comments":
             self.comments_expanded = True
             self.post_message(self.ExpandComments(self.post))
+        elif event.button.id == "btn-comment":
+            self._show_comment_compose()
         elif event.button.id == "btn-like":
             self.post_message(self.LikeRequested(self.post))
         elif event.button.id == "btn-hide":
@@ -498,6 +501,24 @@ class PostBlock(Widget, can_focus=True):
             self.app.set_focus(comments[idx])
             return True
         return False
+
+    def _show_comment_compose(self) -> None:
+        """Show the comment compose widget."""
+        # Remove any existing compose widget
+        self._hide_comment_compose()
+        # Mount new compose widget at the end
+        compose = CommentCompose(post_id=self.post.id)
+        self.mount(compose)
+        self.call_after_refresh(lambda: compose.query_one("#comment-body").focus())
+
+    def _hide_comment_compose(self) -> None:
+        """Hide the comment compose widget."""
+        for compose in self.query(CommentCompose):
+            compose.remove()
+
+    def on_comment_compose_cancelled(self, message: CommentCompose.Cancelled) -> None:
+        """Handle comment compose cancellation."""
+        self._hide_comment_compose()
 
     def action_enter_post_mode(self) -> None:
         """Enter post mode, making buttons focusable."""

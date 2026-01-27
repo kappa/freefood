@@ -9,6 +9,7 @@ from freefood.config import get_username
 from freefood.models import View, Post
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
+from freefood.widgets.comment_compose import CommentCompose
 from freefood.widgets.compose import ComposeBlock
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
@@ -433,3 +434,20 @@ class FeedScreen(BaseScreen):
             await self.refresh_content()
         except Exception as e:
             self.show_error("Failed to post", e)
+
+    async def on_comment_compose_comment_requested(
+        self, message: CommentCompose.CommentRequested
+    ) -> None:
+        """Handle comment creation request."""
+        try:
+            comment = await self.app.api.create_comment(message.post_id, message.body)
+            # Find the post block and add the comment
+            for block in self.query(PostBlock):
+                if block.post.id == message.post_id:
+                    block.post.comments.append(comment)
+                    block._hide_comment_compose()
+                    block.refresh(recompose=True)
+                    break
+            self.notify("Comment added!")
+        except Exception as e:
+            self.show_error("Failed to add comment", e)
