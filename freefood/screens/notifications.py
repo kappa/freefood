@@ -2,17 +2,17 @@
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.screen import Screen
 from textual.widgets import Static
 
 from freefood.models import Notification, View
+from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.notification import NotificationBlock
 from freefood.models import Post
 
 
-class NotificationsScreen(Screen):
+class NotificationsScreen(BaseScreen):
     """Screen for displaying notifications."""
 
     BINDINGS = [
@@ -30,6 +30,17 @@ class NotificationsScreen(Screen):
         height: 1fr;
         padding: 0 1;
     }
+
+    #error-banner {
+        background: $error;
+        color: $text;
+        padding: 0 1;
+        display: none;
+    }
+
+    #error-banner.visible {
+        display: block;
+    }
     """
 
     def __init__(self, state: AppState | None = None) -> None:
@@ -45,6 +56,7 @@ class NotificationsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield MenuBar(self.state.current_view)
+        yield Static("", id="error-banner")
         with ScrollableContainer(id="notifications-container"):
             yield Static("Loading notifications...", classes="loading")
 
@@ -150,7 +162,7 @@ class NotificationsScreen(Screen):
         """Handle navigation to a single post."""
         api = self.app.api
         if api is None:
-            self.notify("Not connected", severity="error")
+            self.show_error("Not connected")
             return
         try:
             post: Post = await api.get_post(message.post_id)
@@ -158,4 +170,4 @@ class NotificationsScreen(Screen):
 
             self.app.push_screen(PostScreen(self.state, post=post))
         except Exception as e:
-            self.notify(f"Failed: {e}", severity="error")
+            self.show_error("Failed to load post", e)

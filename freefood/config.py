@@ -7,13 +7,18 @@ from platformdirs import user_config_dir
 
 APP_NAME = "freefood"
 
-AUTH_URL = (
-    "https://freefeed.net/settings/app-tokens/create"
+AUTH_SCOPES = (
     "?title=FreeFood%20(Console%20Client)"
     "&scopes=read-my-info%20read-my-files%20read-feeds%20read-users-info"
     "%20read-realtime%20manage-my-files%20manage-notifications%20manage-posts"
     "%20manage-my-feeds%20manage-profile%20manage-groups%20manage-subscription-requests"
 )
+
+
+def get_auth_url() -> str:
+    """Get auth URL using configured base_url."""
+    base_url = get_base_url()
+    return f"{base_url}/settings/app-tokens/create{AUTH_SCOPES}"
 
 
 def get_config_path() -> Path:
@@ -49,6 +54,12 @@ def get_base_url() -> str:
     """Get API base URL (defaults to https://freefeed.net)."""
     config = load_config()
     return config.get("auth", "base_url", fallback="https://freefeed.net")
+
+
+def get_username() -> str | None:
+    """Get stored username."""
+    config = load_config()
+    return config.get("user", "username", fallback=None)
 
 
 def save_token(token: str, username: str) -> None:

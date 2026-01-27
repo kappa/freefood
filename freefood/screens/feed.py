@@ -3,10 +3,11 @@
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.screen import Screen
 from textual.widgets import Static, Button
 
+from freefood.config import get_username
 from freefood.models import View, Post
+from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.compose import ComposeBlock
 from freefood.widgets.menu import MenuBar
@@ -74,7 +75,7 @@ class FeedContainer(ScrollableContainer):
                 return
 
 
-class FeedScreen(Screen):
+class FeedScreen(BaseScreen):
     """Screen for displaying feed content."""
 
     BINDINGS = [
@@ -111,6 +112,17 @@ class FeedScreen(Screen):
         color: $accent;
         text-style: underline;
     }
+
+    #error-banner {
+        background: $error;
+        color: $text;
+        padding: 0 1;
+        display: none;
+    }
+
+    #error-banner.visible {
+        display: block;
+    }
     """
 
     def __init__(self, state: AppState | None = None) -> None:
@@ -130,6 +142,7 @@ class FeedScreen(Screen):
     def compose(self) -> ComposeResult:
         """Create feed screen widgets."""
         yield MenuBar(self.state.current_view)
+        yield Static("", id="error-banner")
         with FeedContainer(id="feed-container"):
             yield Static("Loading feed...", classes="loading")
 
@@ -178,7 +191,8 @@ class FeedScreen(Screen):
 
             # Show compose block for HOME and DIRECTS views
             if self.state.current_view in (View.HOME, View.DIRECTS):
-                container.mount(ComposeBlock())
+                default_feeds = get_username() or ""
+                container.mount(ComposeBlock(default_feeds=default_feeds))
 
             if self.state.current_view in (View.USER_FEED, View.GROUP_FEED):
                 if self.state.current_target:
@@ -328,7 +342,7 @@ class FeedScreen(Screen):
                         )
                         break
         except Exception as e:
-            self.notify(f"Failed to load comments: {e}", severity="error")
+            self.show_error("Failed to load comments", e)
 
     async def on_post_block_like_requested(
         self, message: PostBlock.LikeRequested
@@ -350,7 +364,7 @@ class FeedScreen(Screen):
                     block.refresh(recompose=True)
                     break
         except Exception as e:
-            self.notify(f"Failed: {e}", severity="error")
+            self.show_error("Like/unlike failed", e)
 
     async def on_post_block_hide_requested(
         self, message: PostBlock.HideRequested
@@ -371,7 +385,7 @@ class FeedScreen(Screen):
                     block.refresh(recompose=True)
                     break
         except Exception as e:
-            self.notify(f"Failed: {e}", severity="error")
+            self.show_error("Hide/unhide failed", e)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle subscribe/unsubscribe button."""
@@ -393,7 +407,7 @@ class FeedScreen(Screen):
                 event.button.label = "Unsubscribe"
                 self.notify(f"Subscribed to @{self.state.current_target}")
         except Exception as e:
-            self.notify(f"Failed: {e}", severity="error")
+            self.show_error("Subscribe/unsubscribe failed", e)
 
     async def on_post_block_user_clicked(
         self, message: PostBlock.UserClicked
@@ -418,4 +432,4 @@ class FeedScreen(Screen):
             # Refresh feed to show new post
             await self.refresh_content()
         except Exception as e:
-            self.notify(f"Failed to post: {e}", severity="error")
+            self.show_error("Failed to post", e)

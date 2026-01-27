@@ -50,8 +50,7 @@ class FreeFoodApp(App):
             self.notify(f"Welcome, {user.screen_name}!")
         except Exception as e:
             self.api = None
-            self.notify(f"Connection failed: {e}", severity="error")
-            self.push_screen(AuthScreen())
+            self.push_screen(AuthScreen(initial_error=f"Connection failed: {e}"))
 
     async def on_auth_screen_token_submitted(
         self, message: AuthScreen.TokenSubmitted

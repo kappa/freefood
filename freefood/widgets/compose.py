@@ -35,6 +35,9 @@ class ComposeBlock(Widget, can_focus=True):
     ComposeBlock #compose-post-to {
         margin-top: 1;
         height: 1;
+        border: none;
+        background: $surface;
+        color: $text;
     }
 
     ComposeBlock .compose-actions {
@@ -62,10 +65,11 @@ class ComposeBlock(Widget, can_focus=True):
             self.feeds = feeds
             super().__init__()
 
-    def __init__(self) -> None:
+    def __init__(self, default_feeds: str = "") -> None:
         """Initialize compose widget."""
         super().__init__()
         self.is_expanded = False
+        self.default_feeds = default_feeds
 
     def compose(self) -> ComposeResult:
         """Create compose widgets."""
@@ -78,7 +82,11 @@ class ComposeBlock(Widget, can_focus=True):
         else:
             # Expanded state: full compose UI
             yield TextArea(id="compose-body")
-            yield Input(placeholder="Post to...", id="compose-post-to")
+            yield Input(
+                value=self.default_feeds,
+                placeholder="Post to...",
+                id="compose-post-to",
+            )
             with HorizontalGroup(classes="compose-actions"):
                 yield Button("Cancel", id="compose-cancel")
                 yield Button("Post", id="compose-post")

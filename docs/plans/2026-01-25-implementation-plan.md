@@ -24,8 +24,6 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - **Section 0: Fix comment display & loading** ✓
 
 ### Remaining
-- Section 5: Directs view (compose pending)
-- Section 6: Compose block (create posts)
 - Section 7: Comment creation
 - Section 8: Edit posts/comments
 - Section 9: Delete posts/comments
@@ -234,9 +232,11 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 5: Directs View
+## Section 5: Directs View ✓ COMPLETED
 
 **Priority:** Medium - similar to home feed with recipient twist
+
+**Status:** ✓ Completed
 
 ### Tasks
 
@@ -268,9 +268,11 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 6: Compose Block - Create Posts
+## Section 6: Compose Block - Create Posts ✓ COMPLETED
 
 **Priority:** High - core interaction feature
+
+**Status:** ✓ Completed
 
 ### Tasks
 
