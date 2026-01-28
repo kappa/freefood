@@ -77,10 +77,9 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 1: Search View
+## Section 1: Search View ✓ COMPLETED
 
 **Priority:** High - simple read-only feature, good foundation
-
 **Status:** ✓ Completed
 
 ### Tasks
@@ -116,10 +115,9 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 2: User/Group Feed Navigation
+## Section 2: User/Group Feed Navigation ✓ COMPLETED
 
 **Priority:** High - natural follow-up to search, enables browsing
-
 **Status:** ✓ Completed
 
 ### Tasks
@@ -149,10 +147,9 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 3: Subscribe/Unsubscribe
+## Section 3: Subscribe/Unsubscribe ✓ COMPLETED
 
 **Priority:** Medium - extends user feed functionality
-
 **Status:** ✓ Completed
 
 ### Tasks
@@ -185,10 +182,9 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 4: Notifications View
+## Section 4: Notifications View ✓ COMPLETED
 
 **Priority:** Medium - different layout, important feature
-
 **Status:** ✓ Completed
 
 ### Tasks
@@ -259,10 +255,10 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - Header shows recipients: `@alice → @bob, @carol:`
 - No groups in directs
 
-**5.5 Compose for directs (depends on Section 6)**
-- ComposeBlock with "To:" field for recipients
-- Validate: at least one recipient required
-- Recipients are usernames, not group names
+**5.5 Compose for directs (depends on Section 6)** ✓
+- ComposeBlock with "Post to:" field for recipients
+- User changes recipient from default to target username
+- API handles direct message creation based on recipients
 
 **Estimated tests:** 5-6
 
