@@ -1,12 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec file for FreeFood."""
 
+from pathlib import Path
+import importlib.util
+
+
+def rich_unicode_hiddenimports() -> list[str]:
+    """Include Rich unicode table modules with hyphenated names."""
+    spec = importlib.util.find_spec("rich._unicode_data")
+    if not spec or not spec.submodule_search_locations:
+        return []
+    base = Path(next(iter(spec.submodule_search_locations)))
+    return [
+        f"rich._unicode_data.{path.stem}"
+        for path in base.glob("unicode*-*.py")
+    ]
+
 a = Analysis(
     ['freefood/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[('freefood/app.tcss', 'freefood')],
-    hiddenimports=[],
+    hiddenimports=rich_unicode_hiddenimports(),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
