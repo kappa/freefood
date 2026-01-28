@@ -451,3 +451,96 @@ class FeedScreen(BaseScreen):
             self.notify("Comment added!")
         except Exception as e:
             self.show_error("Failed to add comment", e)
+
+    async def on_post_block_edit_post_requested(
+        self, message: PostBlock.EditPostRequested
+    ) -> None:
+        """Handle post edit request."""
+        try:
+            await self.app.api.update_post(message.post.id, message.new_body)
+            # Update the post object
+            message.post.body = message.new_body
+            # Find and refresh the post block
+            for block in self.query(PostBlock):
+                if block.post.id == message.post.id:
+                    block.editing_post = False
+                    block.refresh(recompose=True)
+                    break
+            self.notify("Post updated!")
+        except Exception as e:
+            self.show_error("Failed to update post", e)
+
+    async def on_post_block_delete_post_requested(
+        self, message: PostBlock.DeletePostRequested
+    ) -> None:
+        """Handle post delete request."""
+        try:
+            await self.app.api.delete_post(message.post.id)
+            # Find the post block and determine next focus target
+            blocks = list(self.query(PostBlock))
+            current_idx = None
+            for idx, block in enumerate(blocks):
+                if block.post.id == message.post.id:
+                    current_idx = idx
+                    block.remove()
+                    break
+            # Focus next post (or previous if last)
+            if current_idx is not None and blocks:
+                remaining = [b for b in blocks if b.post.id != message.post.id]
+                if remaining:
+                    if current_idx < len(remaining):
+                        remaining[current_idx].focus()
+                    else:
+                        remaining[-1].focus()
+            self.notify("Post deleted!")
+        except Exception as e:
+            self.show_error("Failed to delete post", e)
+
+    async def on_post_block_edit_comment_requested(
+        self, message: PostBlock.EditCommentRequested
+    ) -> None:
+        """Handle comment edit request."""
+        try:
+            await self.app.api.update_comment(message.comment.id, message.new_body)
+            # Update the comment object
+            message.comment.body = message.new_body
+            # Find and refresh the post block containing the comment
+            for block in self.query(PostBlock):
+                for comment in block.post.comments:
+                    if comment.id == message.comment.id:
+                        # Reset editing state and recompose
+                        for cb in block.query("CommentBlock"):
+                            if hasattr(cb, "editing") and cb.editing:
+                                cb.editing = False
+                        block.refresh(recompose=True)
+                        self.notify("Comment updated!")
+                        return
+        except Exception as e:
+            self.show_error("Failed to update comment", e)
+
+    async def on_post_block_delete_comment_requested(
+        self, message: PostBlock.DeleteCommentRequested
+    ) -> None:
+        """Handle comment delete request."""
+        try:
+            await self.app.api.delete_comment(message.comment.id)
+            # Find the post block containing the comment and remove it
+            for block in self.query(PostBlock):
+                for i, comment in enumerate(block.post.comments):
+                    if comment.id == message.comment.id:
+                        # Determine next focus target
+                        next_focus_idx = min(i, len(block.post.comments) - 2)
+                        block.post.comments.pop(i)
+                        block.refresh(recompose=True)
+                        # Focus next comment or post block
+                        if next_focus_idx >= 0 and block.post.comments:
+                            block.set_timer(
+                                0.05,
+                                lambda: block.focus_comment_at(next_focus_idx),
+                            )
+                        else:
+                            block.focus()
+                        self.notify("Comment deleted!")
+                        return
+        except Exception as e:
+            self.show_error("Failed to delete comment", e)

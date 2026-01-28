@@ -22,10 +22,11 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 - Hide/unhide posts
 - API client migrated to v4
 - **Section 0: Fix comment display & loading** ✓
+- **Section 8: Edit posts/comments** ✓
+- **Section 9: Delete posts/comments** ✓
 
 ### Remaining
-- Section 8: Edit posts/comments
-- Section 9: Delete posts/comments
+- All v1.0 features complete!
 
 ---
 
@@ -378,9 +379,10 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 8: Edit Posts & Comments
+## Section 8: Edit Posts & Comments ✓ COMPLETED
 
 **Priority:** Medium - completes authoring features
+**Status:** ✓ Completed
 
 ### Tasks
 
@@ -422,9 +424,10 @@ This plan covers the remaining v1.0 features for FreeFood, organized into logica
 
 ---
 
-## Section 9: Delete Posts & Comments
+## Section 9: Delete Posts & Comments ✓ COMPLETED
 
 **Priority:** Medium - completes CRUD
+**Status:** ✓ Completed
 
 ### Tasks
 

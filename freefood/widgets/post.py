@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, HorizontalGroup, Vertical, VerticalGroup
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static, Button
+from textual.widgets import Static, Button, TextArea
 
 from freefood.models import Post, Comment
 from freefood.search import highlight_text
@@ -57,6 +57,18 @@ class CommentBlock(Widget):
     CommentBlock #comment-meta-prefix {
         width: 3;
     }
+
+    CommentBlock .comment-edit-actions {
+        height: auto;
+        margin-top: 1;
+    }
+
+    CommentBlock .comment-edit-actions Button {
+        min-width: 8;
+        height: 1;
+        border: none;
+        margin-right: 1;
+    }
     """
 
     MAX_COMMENT_LINES = 10
@@ -72,6 +84,8 @@ class CommentBlock(Widget):
         self.comment = comment
         self.can_focus = post_mode
         self.highlight_terms = highlight_terms or []
+        self.editing = False
+        self.confirming_delete = False
 
     def _format_body(self) -> str:
         """Format comment body with truncation and optional highlighting."""
@@ -87,6 +101,14 @@ class CommentBlock(Widget):
 
     def compose(self) -> ComposeResult:
         """Create comment widgets."""
+        if self.editing:
+            # Edit mode: show textarea with Save/Cancel buttons
+            yield TextArea(self.comment.body, id="edit-comment-body")
+            with HorizontalGroup(classes="comment-edit-actions"):
+                yield Button("Cancel", id="btn-cancel-comment-edit")
+                yield Button("Save", id="btn-save-comment-edit")
+            return
+
         body = self._format_body()
         likes_str = f"[{self.comment.likes}♥]" if self.comment.likes else "[0♥]"
         if self.highlight_terms:
@@ -113,6 +135,38 @@ class CommentBlock(Widget):
                     yield author_btn
                 else:
                     yield Static("@unknown")
+                # Edit and Delete buttons for own comments
+                if self.comment.is_own:
+                    edit_btn = Button(
+                        "Edit",
+                        id=f"comment-edit-{self.comment.id}",
+                        classes="comment-edit-btn",
+                    )
+                    edit_btn.can_focus = self.can_focus
+                    yield edit_btn
+                    if self.confirming_delete:
+                        confirm_btn = Button(
+                            "Confirm",
+                            id=f"comment-confirm-delete-{self.comment.id}",
+                            classes="comment-confirm-delete-btn",
+                        )
+                        confirm_btn.can_focus = self.can_focus
+                        yield confirm_btn
+                        cancel_btn = Button(
+                            "Cancel",
+                            id=f"comment-cancel-delete-{self.comment.id}",
+                            classes="comment-cancel-delete-btn",
+                        )
+                        cancel_btn.can_focus = self.can_focus
+                        yield cancel_btn
+                    else:
+                        delete_btn = Button(
+                            "Delete",
+                            id=f"comment-delete-{self.comment.id}",
+                            classes="comment-delete-btn",
+                        )
+                        delete_btn.can_focus = self.can_focus
+                        yield delete_btn
 
 
 class PostBlock(Widget, can_focus=True):
@@ -256,6 +310,36 @@ class PostBlock(Widget, can_focus=True):
             self.user_type = user_type
             super().__init__()
 
+    class EditPostRequested(Message):
+        """Request to save edited post."""
+
+        def __init__(self, post: Post, new_body: str) -> None:
+            self.post = post
+            self.new_body = new_body
+            super().__init__()
+
+    class DeletePostRequested(Message):
+        """Request to delete post."""
+
+        def __init__(self, post: Post) -> None:
+            self.post = post
+            super().__init__()
+
+    class EditCommentRequested(Message):
+        """Request to save edited comment."""
+
+        def __init__(self, comment: Comment, new_body: str) -> None:
+            self.comment = comment
+            self.new_body = new_body
+            super().__init__()
+
+    class DeleteCommentRequested(Message):
+        """Request to delete comment."""
+
+        def __init__(self, comment: Comment) -> None:
+            self.comment = comment
+            super().__init__()
+
     def __init__(self, post: Post, highlight_terms: list[str] | None = None) -> None:
         """Initialize post widget."""
         super().__init__()
@@ -264,6 +348,8 @@ class PostBlock(Widget, can_focus=True):
         self.comments_expanded = False
         self.post_mode = False  # When True, buttons are focusable
         self.highlight_terms = highlight_terms or []
+        self.editing_post = False  # When True, post body is editable
+        self.confirming_delete = False  # When True, show delete confirmation
 
     def compose(self) -> ComposeResult:
         """Create post widgets."""
@@ -313,40 +399,54 @@ class PostBlock(Widget, can_focus=True):
                 else:
                     yield Static(" wrote:", classes="header-sep")
 
-            # Body
-            yield Static(
-                self._format_body(),
-                classes="post-body",
-                markup=bool(self.highlight_terms),
-            )
-            if self._body_is_truncated():
-                btn = Button("Show more...", id="show-more-body", classes="show-more")
-                btn.can_focus = self.post_mode
-                yield btn
+            # Body (or edit textarea)
+            if self.editing_post:
+                yield TextArea(self.post.body, id="edit-post-body")
+                with HorizontalGroup(classes="edit-actions"):
+                    yield Button("Cancel", id="btn-cancel-edit")
+                    yield Button("Save", id="btn-save-edit")
+            else:
+                yield Static(
+                    self._format_body(),
+                    classes="post-body",
+                    markup=bool(self.highlight_terms),
+                )
+                if self._body_is_truncated():
+                    btn = Button("Show more...", id="show-more-body", classes="show-more")
+                    btn.can_focus = self.post_mode
+                    yield btn
 
-            # Timestamp
-            yield Static(format_time_ago(self.post.created_at), classes="post-meta")
+                # Timestamp
+                yield Static(format_time_ago(self.post.created_at), classes="post-meta")
 
-            # Action buttons on separate line
-            with Horizontal(classes="post-actions"):
-                btn_comment = Button("Comment", id="btn-comment")
-                btn_comment.can_focus = self.post_mode
-                yield btn_comment
-                like_label = "Unlike" if self.post.is_liked else "Like"
-                btn_like = Button(f"♥ {like_label}", id="btn-like")
-                btn_like.can_focus = self.post_mode
-                yield btn_like
-                hide_label = "Unhide" if self.post.is_hidden else "Hide"
-                btn_hide = Button(hide_label, id="btn-hide")
-                btn_hide.can_focus = self.post_mode
-                yield btn_hide
-                if self.post.is_own:
-                    btn_edit = Button("Edit", id="btn-edit")
-                    btn_edit.can_focus = self.post_mode
-                    yield btn_edit
-                    btn_delete = Button("Delete", id="btn-delete")
-                    btn_delete.can_focus = self.post_mode
-                    yield btn_delete
+                # Action buttons on separate line
+                with Horizontal(classes="post-actions"):
+                    btn_comment = Button("Comment", id="btn-comment")
+                    btn_comment.can_focus = self.post_mode
+                    yield btn_comment
+                    like_label = "Unlike" if self.post.is_liked else "Like"
+                    btn_like = Button(f"♥ {like_label}", id="btn-like")
+                    btn_like.can_focus = self.post_mode
+                    yield btn_like
+                    hide_label = "Unhide" if self.post.is_hidden else "Hide"
+                    btn_hide = Button(hide_label, id="btn-hide")
+                    btn_hide.can_focus = self.post_mode
+                    yield btn_hide
+                    if self.post.is_own:
+                        btn_edit = Button("Edit", id="btn-edit")
+                        btn_edit.can_focus = self.post_mode
+                        yield btn_edit
+                        if self.confirming_delete:
+                            btn_confirm = Button("Confirm Delete", id="btn-confirm-delete")
+                            btn_confirm.can_focus = self.post_mode
+                            yield btn_confirm
+                            btn_cancel = Button("Cancel", id="btn-cancel-delete")
+                            btn_cancel.can_focus = self.post_mode
+                            yield btn_cancel
+                        else:
+                            btn_delete = Button("Delete", id="btn-delete")
+                            btn_delete.can_focus = self.post_mode
+                            yield btn_delete
 
             # Likes
             yield from self._render_likes()
@@ -492,6 +592,155 @@ class PostBlock(Widget, can_focus=True):
             self.post_message(self.LikeRequested(self.post))
         elif event.button.id == "btn-hide":
             self.post_message(self.HideRequested(self.post))
+        elif event.button.id == "btn-edit":
+            self._start_editing_post()
+        elif event.button.id == "btn-cancel-edit":
+            self._cancel_editing_post()
+        elif event.button.id == "btn-save-edit":
+            self._save_editing_post()
+        elif event.button.id == "btn-delete":
+            self._start_delete_confirmation()
+        elif event.button.id == "btn-cancel-delete":
+            self._cancel_delete_confirmation()
+        elif event.button.id == "btn-confirm-delete":
+            self._confirm_delete()
+        elif event.button.id and event.button.id.startswith("comment-edit-"):
+            comment_id = event.button.id[len("comment-edit-"):]
+            self._start_editing_comment(comment_id)
+        elif event.button.id == "btn-cancel-comment-edit":
+            self._cancel_editing_comment()
+        elif event.button.id == "btn-save-comment-edit":
+            self._save_editing_comment()
+        elif event.button.id and event.button.id.startswith("comment-delete-"):
+            comment_id = event.button.id[len("comment-delete-"):]
+            self._start_comment_delete_confirmation(comment_id)
+        elif event.button.id and event.button.id.startswith("comment-confirm-delete-"):
+            comment_id = event.button.id[len("comment-confirm-delete-"):]
+            self._confirm_delete_comment(comment_id)
+        elif event.button.id and event.button.id.startswith("comment-cancel-delete-"):
+            comment_id = event.button.id[len("comment-cancel-delete-"):]
+            self._cancel_comment_delete_confirmation(comment_id)
+
+    def _start_editing_post(self) -> None:
+        """Enter post edit mode."""
+        self.editing_post = True
+        self.refresh(recompose=True)
+        self.call_after_refresh(lambda: self.query_one("#edit-post-body").focus())
+
+    def _cancel_editing_post(self) -> None:
+        """Cancel post editing and focus Edit button."""
+        self.editing_post = False
+        self.refresh(recompose=True)
+        self.call_after_refresh(lambda: self._focus_edit_button())
+
+    def _save_editing_post(self) -> None:
+        """Save edited post."""
+        textarea = self.query_one("#edit-post-body", TextArea)
+        new_body = textarea.text.strip()
+        if new_body:
+            self.post_message(self.EditPostRequested(self.post, new_body))
+
+    def _focus_edit_button(self) -> None:
+        """Focus the Edit button if it exists."""
+        try:
+            edit_btn = self.query_one("#btn-edit", Button)
+            edit_btn.focus()
+        except Exception:
+            pass  # Button might not exist
+
+    def _start_delete_confirmation(self) -> None:
+        """Show delete confirmation buttons."""
+        self.confirming_delete = True
+        self.refresh(recompose=True)
+
+    def _cancel_delete_confirmation(self) -> None:
+        """Cancel delete confirmation."""
+        self.confirming_delete = False
+        self.refresh(recompose=True)
+
+    def _confirm_delete(self) -> None:
+        """Confirm and emit delete request."""
+        self.post_message(self.DeletePostRequested(self.post))
+
+    def _start_editing_comment(self, comment_id: str) -> None:
+        """Enter edit mode for a comment."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.comment.id == comment_id:
+                comment_block.editing = True
+                comment_block.refresh(recompose=True)
+                # Use set_timer to wait for the child to recompose
+                self.set_timer(
+                    0.05,
+                    lambda: self._focus_comment_edit_textarea(),
+                )
+                break
+
+    def _focus_comment_edit_textarea(self) -> None:
+        """Focus the comment edit textarea if it exists."""
+        from textual.css.query import NoMatches
+        try:
+            textarea = self.query_one("#edit-comment-body", TextArea)
+            textarea.focus()
+        except NoMatches:
+            pass  # Widget not yet mounted
+
+    def _cancel_editing_comment(self) -> None:
+        """Cancel comment editing and focus edit button."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.editing:
+                comment_id = comment_block.comment.id
+                comment_block.editing = False
+                comment_block.refresh(recompose=True)
+                # Focus the edit button after recompose
+                self.set_timer(
+                    0.05,
+                    lambda cid=comment_id: self._focus_comment_edit_button(cid),
+                )
+                break
+
+    def _focus_comment_edit_button(self, comment_id: str) -> None:
+        """Focus the Edit button for a specific comment."""
+        from textual.css.query import NoMatches
+        try:
+            edit_btn = self.query_one(f"#comment-edit-{comment_id}", Button)
+            edit_btn.focus()
+        except NoMatches:
+            pass  # Button might not exist
+
+    def _save_editing_comment(self) -> None:
+        """Save edited comment."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.editing:
+                textarea = self.query_one("#edit-comment-body", TextArea)
+                new_body = textarea.text.strip()
+                if new_body:
+                    self.post_message(
+                        self.EditCommentRequested(comment_block.comment, new_body)
+                    )
+                break
+
+    def _start_comment_delete_confirmation(self, comment_id: str) -> None:
+        """Show delete confirmation for a comment."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.comment.id == comment_id:
+                comment_block.confirming_delete = True
+                comment_block.refresh(recompose=True)
+                break
+
+    def _cancel_comment_delete_confirmation(self, comment_id: str) -> None:
+        """Cancel comment delete confirmation."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.comment.id == comment_id:
+                comment_block.confirming_delete = False
+                comment_block.refresh(recompose=True)
+                break
+
+    def _confirm_delete_comment(self, comment_id: str) -> None:
+        """Confirm and emit delete comment request."""
+        for comment_block in self.query(CommentBlock):
+            if comment_block.comment.id == comment_id:
+                self.post_message(self.DeleteCommentRequested(comment_block.comment))
+                break
 
     def focus_comment_at(self, index: int) -> bool:
         """Focus the comment at a given index if available."""
@@ -548,7 +797,30 @@ class PostBlock(Widget, can_focus=True):
         self.focus()
 
     def on_key(self, event) -> None:
-        """Handle key events for post mode navigation."""
+        """Handle key events for post mode navigation and edit shortcuts."""
+        # Handle edit mode keyboard shortcuts
+        if self.editing_post:
+            if event.key == "escape":
+                self._cancel_editing_post()
+                event.stop()
+                return
+            elif event.key == "ctrl+enter":
+                self._save_editing_post()
+                event.stop()
+                return
+
+        # Handle comment edit mode keyboard shortcuts
+        for comment_block in self.query(CommentBlock):
+            if comment_block.editing:
+                if event.key == "escape":
+                    self._cancel_editing_comment()
+                    event.stop()
+                    return
+                elif event.key == "ctrl+enter":
+                    self._save_editing_comment()
+                    event.stop()
+                    return
+
         if not self.post_mode:
             return
         # When in post mode and a child button has focus, handle navigation
