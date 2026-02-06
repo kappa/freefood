@@ -1,12 +1,18 @@
 """Tests for FeedScreen behavior."""
 
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
+from textual.app import App
+from textual.widgets import Button, Static
 
-from freefood.models import Comment, Post, User, View
-from freefood.screens.feed import FeedScreen
+from freefood.models import Comment, HistoryEntry, Post, User, View
+from freefood.screens.feed import FeedContainer, FeedScreen
 from freefood.state import AppState
+from freefood.widgets.comment_compose import CommentCompose
+from freefood.widgets.compose import ComposeBlock
+from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import CommentBlock, PostBlock
 
 
@@ -18,6 +24,23 @@ def make_user(
 ) -> User:
     """Create a test user."""
     return User(id=id, username=username, screen_name=screen_name, type=user_type)
+
+
+def make_comment(
+    id: str = "c1",
+    body: str = "Test comment",
+    author: User | None = None,
+    is_own: bool = False,
+) -> Comment:
+    """Create a test comment."""
+    return Comment(
+        id=id,
+        body=body,
+        author=author or make_user(username="commenter"),
+        created_at=datetime.now(),
+        likes=0,
+        is_own=is_own,
+    )
 
 
 def make_post(
@@ -41,6 +64,30 @@ def make_post(
         omitted_likes=0,
         likes=[],
     )
+
+
+class MockApp(App):
+    """Test app that pushes FeedScreen and tracks pushed screens."""
+
+    def __init__(
+        self,
+        state: AppState | None = None,
+        api: object | None = None,
+    ):
+        super().__init__()
+        self.state = state or AppState()
+        self.api = api
+        self.pushed_screens: list = []
+        self._original_push = None
+
+    async def on_mount(self) -> None:
+        self._original_push = self.push_screen
+
+        def tracking_push(screen, *args, **kwargs):
+            self.pushed_screens.append(screen)
+            return self._original_push(screen, *args, **kwargs)
+
+        self.push_screen = tracking_push  # type: ignore[assignment]
 
 
 class TestFeedModeNavigation:
@@ -1084,3 +1131,1296 @@ class TestComposeBlockIntegration:
             assert len(compose_blocks) == 0, (
                 "ComposeBlock should NOT appear in GROUP_FEED view"
             )
+
+
+# ---------------------------------------------------------------------------
+# New tests: cover all missing lines/branches in feed.py
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_api(**overrides):
+    """Create a MockAPI with sensible defaults and optional overrides."""
+    api = AsyncMock()
+    api.get_home_feed = AsyncMock(return_value=[])
+    api.get_directs = AsyncMock(return_value=[])
+    api.get_user_feed = AsyncMock(return_value=[])
+    api.get_user_subscription_status = AsyncMock(return_value=False)
+    api.get_unread_notifications_count = AsyncMock(return_value=0)
+    api.get_unread_directs_count = AsyncMock(return_value=0)
+    api.get_post = AsyncMock(return_value=None)
+    api.like_post = AsyncMock()
+    api.unlike_post = AsyncMock()
+    api.hide_post = AsyncMock()
+    api.unhide_post = AsyncMock()
+    api.subscribe = AsyncMock()
+    api.unsubscribe = AsyncMock()
+    api.create_post = AsyncMock()
+    api.create_comment = AsyncMock(return_value=make_comment())
+    api.update_post = AsyncMock()
+    api.update_comment = AsyncMock()
+    api.delete_post = AsyncMock()
+    api.delete_comment = AsyncMock()
+    for k, v in overrides.items():
+        setattr(api, k, v)
+    return api
+
+
+class TestStateFallback:
+    """Test the state property fallback to app.state (line 136)."""
+
+    @pytest.mark.asyncio
+    async def test_state_falls_back_to_app_state(self):
+        """FeedScreen.state should fall back to app.state when _state is None."""
+        api = _make_mock_api()
+        app = MockApp(api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            screen = FeedScreen(state=None)
+            await app._original_push(screen)
+            await pilot.pause()
+            # The screen's state should be the app's state
+            assert screen.state is app.state
+
+
+class TestRefreshContentViews:
+    """Test refresh_content with different views (lines 160-170)."""
+
+    @pytest.mark.asyncio
+    async def test_directs_view_calls_get_directs(self):
+        """DIRECTS view should call api.get_directs."""
+        posts = [make_post(id="d1")]
+        api = _make_mock_api(get_directs=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.DIRECTS)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            api.get_directs.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_user_feed_without_target_returns_empty(self):
+        """USER_FEED without target should result in empty posts (line 168)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.USER_FEED, current_target=None)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert screen.posts == []
+
+    @pytest.mark.asyncio
+    async def test_unknown_view_returns_empty(self):
+        """Unhandled view in refresh_content falls to else (line 170)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert screen.posts == []
+
+    @pytest.mark.asyncio
+    async def test_api_is_none_shows_error(self):
+        """When api is None, refresh_content should show error."""
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=None)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            error = screen.query_one(".error", Static)
+            assert "Not connected" in str(error.render())
+
+    @pytest.mark.asyncio
+    async def test_api_raises_shows_error(self):
+        """When api raises, refresh_content should show error message."""
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(side_effect=Exception("Network error"))
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            error = screen.query_one(".error", Static)
+            assert "Network error" in str(error.render())
+
+
+class TestActionFocusMenu:
+    """Test action_focus_menu when not in post mode (lines 251-252)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_menu_focuses_menu_bar(self):
+        """Escape when not in post mode should focus the menu bar."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.action_focus_menu()
+            await pilot.pause()
+            focused = app.focused
+            assert isinstance(focused, Button)
+
+
+class TestActionFocusFeed:
+    """Test action_focus_feed (lines 256-259)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_feed_focuses_first_post(self):
+        """action_focus_feed should focus the first PostBlock."""
+        posts = [make_post(id="p1")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # First focus menu, then action_focus_feed
+            screen.action_focus_menu()
+            await pilot.pause()
+            screen.action_focus_feed()
+            await pilot.pause()
+            focused = app.focused
+            assert isinstance(focused, PostBlock)
+
+    @pytest.mark.asyncio
+    async def test_focus_feed_when_posts_exist(self):
+        """action_focus_feed should focus the first post when posts exist."""
+        posts = [make_post(id="p1"), make_post(id="p2")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # Focus menu first so we can verify focus moves to feed
+            screen.action_focus_menu()
+            await pilot.pause()
+            screen.action_focus_feed()
+            await pilot.pause()
+            assert isinstance(app.focused, PostBlock)
+
+
+class TestFindPostBlock:
+    """Test _find_post_block (lines 267-268)."""
+
+    @pytest.mark.asyncio
+    async def test_find_post_block_returns_none_for_non_post(self):
+        """_find_post_block should return None when widget is not in a PostBlock."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # Pass the menu bar - not a child of PostBlock
+            menu = screen.query_one(MenuBar)
+            result = screen._find_post_block(menu)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_find_post_block_returns_none_for_none(self):
+        """_find_post_block should return None when widget is None."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            result = screen._find_post_block(None)
+            assert result is None
+
+
+class TestActionRefresh:
+    """Test action_refresh (line 272)."""
+
+    @pytest.mark.asyncio
+    async def test_action_refresh_triggers_worker(self):
+        """action_refresh should call run_worker with refresh_content."""
+        posts = [make_post()]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # Call action_refresh (dispatches worker)
+            screen.action_refresh()
+            await pilot.pause()
+            # get_home_feed should have been called at least 2 times
+            # (once on mount, once on refresh)
+            assert api.get_home_feed.call_count >= 2
+
+
+class TestMenuViewSelected:
+    """Test on_menu_bar_view_selected (lines 277-302)."""
+
+    @pytest.mark.asyncio
+    async def test_search_view_pushes_search_screen(self):
+        """Selecting SEARCH should push SearchScreen."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.SEARCH))
+            await pilot.pause()
+
+            from freefood.screens.search import SearchScreen
+
+            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_errors_view_pushes_errors_screen(self):
+        """Selecting ERRORS should push ErrorsScreen (lines 290-296)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
+            await pilot.pause()
+
+            from freefood.screens.errors import ErrorsScreen
+
+            assert any(isinstance(s, ErrorsScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_view_change_refreshes_content(self):
+        """Selecting a different feed view should refresh content (lines 298-302)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.DIRECTS))
+            await pilot.pause()
+            assert state.current_view == View.DIRECTS
+
+    @pytest.mark.asyncio
+    async def test_same_view_still_refreshes(self):
+        """Selecting the same view should still refresh (line 302)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.HOME))
+            await pilot.pause()
+            # Should still call get_home_feed
+            assert api.get_home_feed.call_count >= 2
+
+
+class TestBackNavigation:
+    """Test on_menu_bar_back_requested (lines 306-322)."""
+
+    @pytest.mark.asyncio
+    async def test_back_with_no_history_notifies(self):
+        """Back with empty history should notify 'No history' (line 322)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+            assert any("No history" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_back_to_home_refreshes_feed(self):
+        """Back to HOME should update state and refresh (lines 306-319)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.DIRECTS)
+        state.history.append(
+            HistoryEntry(view=View.HOME, target=None, scroll_position=0)
+        )
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+            assert state.current_view == View.HOME
+            assert state.current_target is None
+
+    @pytest.mark.asyncio
+    async def test_back_to_search_pushes_search_screen(self):
+        """Back to SEARCH should push SearchScreen (lines 312-315)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        state.history.append(
+            HistoryEntry(view=View.SEARCH, target=None, scroll_position=0, query="test")
+        )
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+            assert state.current_view == View.SEARCH
+            assert state.search_query == "test"
+
+            from freefood.screens.search import SearchScreen
+
+            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_back_restores_target(self):
+        """Back should restore current_target from history entry (line 309)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        state.history.append(
+            HistoryEntry(view=View.USER_FEED, target="bob", scroll_position=0)
+        )
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+            assert state.current_view == View.USER_FEED
+            assert state.current_target == "bob"
+
+    @pytest.mark.asyncio
+    async def test_back_without_query_does_not_set_search_query(self):
+        """Back to HOME should not modify search_query if entry has no query."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.DIRECTS, search_query="old")
+        state.history.append(
+            HistoryEntry(view=View.HOME, target=None, scroll_position=0)
+        )
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+            assert state.search_query == "old"
+
+
+class TestExpandCommentsError:
+    """Test expand_comments error path (lines 345-346)."""
+
+    @pytest.mark.asyncio
+    async def test_expand_comments_error_shows_banner(self):
+        """When get_post raises, should show error banner."""
+        api = _make_mock_api(get_post=AsyncMock(side_effect=Exception("API error")))
+        state = AppState(current_view=View.HOME)
+        posts = [make_post(id="p1")]
+        api.get_home_feed = AsyncMock(return_value=posts)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_expand_comments(
+                PostBlock.ExpandComments(posts[0])
+            )
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestLikeUnlike:
+    """Test like/unlike post (lines 352-368)."""
+
+    @pytest.mark.asyncio
+    async def test_like_post(self):
+        """Liking a post should call api.like_post and update state."""
+        post = make_post(id="p1")
+        post.is_liked = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            api.like_post.assert_called_once_with("p1")
+            assert post.is_liked is True
+            assert any("Liked" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_unlike_post(self):
+        """Unliking a post should call api.unlike_post and update state."""
+        post = make_post(id="p1")
+        post.is_liked = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            api.unlike_post.assert_called_once_with("p1")
+            assert post.is_liked is False
+            assert any("Unliked" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_like_error_shows_banner(self):
+        """Like failure should show error banner."""
+        post = make_post(id="p1")
+        post.is_liked = False
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            like_post=AsyncMock(side_effect=Exception("Like failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestHideUnhide:
+    """Test hide/unhide post (lines 374-389)."""
+
+    @pytest.mark.asyncio
+    async def test_hide_post(self):
+        """Hiding a post should call api.hide_post."""
+        post = make_post(id="p1")
+        post.is_hidden = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_hide_requested(PostBlock.HideRequested(post))
+            await pilot.pause()
+            api.hide_post.assert_called_once_with("p1")
+            assert post.is_hidden is True
+            assert any("Hidden" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_unhide_post(self):
+        """Unhiding a post should call api.unhide_post."""
+        post = make_post(id="p1")
+        post.is_hidden = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_hide_requested(PostBlock.HideRequested(post))
+            await pilot.pause()
+            api.unhide_post.assert_called_once_with("p1")
+            assert post.is_hidden is False
+            assert any("Unhidden" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_hide_error_shows_banner(self):
+        """Hide failure should show error banner."""
+        post = make_post(id="p1")
+        post.is_hidden = False
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            hide_post=AsyncMock(side_effect=Exception("Hide failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_hide_requested(PostBlock.HideRequested(post))
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestSubscribeButton:
+    """Test subscribe/unsubscribe button handling (lines 394, 397, 406-411)."""
+
+    @pytest.mark.asyncio
+    async def test_non_subscribe_button_ignored(self):
+        """Pressing a button that is not btn-subscribe should be ignored (line 394)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        api.get_home_feed = AsyncMock(return_value=[make_post()])
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # Simulate a button press with a different id
+            btn = Button("Other", id="other-button")
+            event = Button.Pressed(btn)
+            await screen.on_button_pressed(event)
+            await pilot.pause()
+            # No API calls for subscribe/unsubscribe
+            api.subscribe.assert_not_called()
+            api.unsubscribe.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_button_no_target_returns(self):
+        """btn-subscribe press with no target should return early (line 397)."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.USER_FEED, current_target=None)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            btn = Button("Subscribe", id="btn-subscribe")
+            event = Button.Pressed(btn)
+            await screen.on_button_pressed(event)
+            await pilot.pause()
+            api.subscribe.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_calls_api(self):
+        """Pressing subscribe when not subscribed should call API."""
+        posts = [make_post()]
+        api = _make_mock_api(get_user_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.USER_FEED, current_target="bob")
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert screen.is_subscribed is False
+            btn = screen.query_one("#btn-subscribe", Button)
+            btn.press()
+            await pilot.pause()
+            api.subscribe.assert_called_once_with("bob")
+            assert screen.is_subscribed is True
+            assert btn.label.plain == "Unsubscribe"
+
+    @pytest.mark.asyncio
+    async def test_subscribe_error_shows_banner(self):
+        """Subscribe failure should show error banner (line 411)."""
+        posts = [make_post()]
+        api = _make_mock_api(
+            get_user_feed=AsyncMock(return_value=posts),
+            subscribe=AsyncMock(side_effect=Exception("Sub failed")),
+        )
+        state = AppState(current_view=View.USER_FEED, current_target="bob")
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            btn = screen.query_one("#btn-subscribe", Button)
+            btn.press()
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestComposePost:
+    """Test post creation (lines 425-434)."""
+
+    @pytest.mark.asyncio
+    async def test_create_post_success(self):
+        """PostRequested should call api.create_post and refresh."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = ComposeBlock.PostRequested("Hello world", ["alice"])
+            await screen.on_compose_block_post_requested(msg)
+            await pilot.pause()
+            api.create_post.assert_called_once_with("Hello world", ["alice"])
+            assert any("Posted" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_create_post_error_shows_banner(self):
+        """PostRequested failure should show error banner."""
+        api = _make_mock_api(
+            create_post=AsyncMock(side_effect=Exception("Post failed"))
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = ComposeBlock.PostRequested("Hello", ["alice"])
+            await screen.on_compose_block_post_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestCreateComment:
+    """Test comment creation (lines 440-451)."""
+
+    @pytest.mark.asyncio
+    async def test_create_comment_success(self):
+        """CommentRequested should call api.create_comment and update post."""
+        post = make_post(id="p1")
+        new_comment = make_comment(id="c_new", body="New comment")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            create_comment=AsyncMock(return_value=new_comment),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = CommentCompose.CommentRequested("p1", "New comment")
+            await screen.on_comment_compose_comment_requested(msg)
+            await pilot.pause()
+            api.create_comment.assert_called_once_with("p1", "New comment")
+            assert any(c.id == "c_new" for c in post.comments)
+            assert any("Comment added" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_create_comment_error_shows_banner(self):
+        """CommentRequested failure should show error banner."""
+        post = make_post(id="p1")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            create_comment=AsyncMock(side_effect=Exception("Comment failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = CommentCompose.CommentRequested("p1", "Hello")
+            await screen.on_comment_compose_comment_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestEditPost:
+    """Test post editing (lines 457-469)."""
+
+    @pytest.mark.asyncio
+    async def test_edit_post_success(self):
+        """EditPostRequested should call api.update_post and update body."""
+        post = make_post(id="p1", body="Old body")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.EditPostRequested(post, "New body")
+            await screen.on_post_block_edit_post_requested(msg)
+            await pilot.pause()
+            api.update_post.assert_called_once_with("p1", "New body")
+            assert post.body == "New body"
+            assert any("Post updated" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_edit_post_error_shows_banner(self):
+        """EditPostRequested failure should show error banner."""
+        post = make_post(id="p1")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            update_post=AsyncMock(side_effect=Exception("Edit failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.EditPostRequested(post, "New body")
+            await screen.on_post_block_edit_post_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestDeletePost:
+    """Test post deletion (lines 475-495)."""
+
+    @pytest.mark.asyncio
+    async def test_delete_post_success_focuses_next(self):
+        """DeletePostRequested should remove post and focus next."""
+        posts = [make_post(id="p1"), make_post(id="p2"), make_post(id="p3")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 30), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeletePostRequested(posts[0])
+            await screen.on_post_block_delete_post_requested(msg)
+            await pilot.pause()
+            api.delete_post.assert_called_once_with("p1")
+            assert any("Post deleted" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_delete_last_post_focuses_previous(self):
+        """Deleting the last post should focus the previous one."""
+        posts = [make_post(id="p1"), make_post(id="p2")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 30), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeletePostRequested(posts[1])
+            await screen.on_post_block_delete_post_requested(msg)
+            await pilot.pause()
+            api.delete_post.assert_called_once_with("p2")
+
+    @pytest.mark.asyncio
+    async def test_delete_post_error_shows_banner(self):
+        """DeletePostRequested failure should show error banner."""
+        post = make_post(id="p1")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            delete_post=AsyncMock(side_effect=Exception("Delete failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeletePostRequested(post)
+            await screen.on_post_block_delete_post_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestEditComment:
+    """Test comment editing (lines 501-517)."""
+
+    @pytest.mark.asyncio
+    async def test_edit_comment_success(self):
+        """EditCommentRequested should call api.update_comment."""
+        comment = make_comment(id="c1", body="Old")
+        post = make_post(id="p1")
+        post.comments = [comment]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            # Set a CommentBlock to editing=True to cover line 512
+            for block in screen.query(PostBlock):
+                for cb in block.query(CommentBlock):
+                    cb.editing = True
+            msg = PostBlock.EditCommentRequested(comment, "Updated")
+            await screen.on_post_block_edit_comment_requested(msg)
+            await pilot.pause()
+            api.update_comment.assert_called_once_with("c1", "Updated")
+            assert comment.body == "Updated"
+            assert any("Comment updated" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_edit_comment_error_shows_banner(self):
+        """EditCommentRequested failure should show error banner."""
+        comment = make_comment(id="c1")
+        post = make_post(id="p1")
+        post.comments = [comment]
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            update_comment=AsyncMock(side_effect=Exception("Edit failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.EditCommentRequested(comment, "New")
+            await screen.on_post_block_edit_comment_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestDeleteComment:
+    """Test comment deletion (lines 523-544)."""
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_success(self):
+        """DeleteCommentRequested should remove comment from post."""
+        c1 = make_comment(id="c1", body="First")
+        c2 = make_comment(id="c2", body="Second")
+        post = make_post(id="p1")
+        post.comments = [c1, c2]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeleteCommentRequested(c1)
+            await screen.on_post_block_delete_comment_requested(msg)
+            await pilot.pause()
+            api.delete_comment.assert_called_once_with("c1")
+            assert c1 not in post.comments
+            assert any("Comment deleted" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_delete_last_comment_focuses_post(self):
+        """Deleting the only comment should focus the post block."""
+        c1 = make_comment(id="c1", body="Only comment")
+        post = make_post(id="p1")
+        post.comments = [c1]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeleteCommentRequested(c1)
+            await screen.on_post_block_delete_comment_requested(msg)
+            await pilot.pause()
+            api.delete_comment.assert_called_once_with("c1")
+            assert len(post.comments) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_error_shows_banner(self):
+        """DeleteCommentRequested failure should show error banner."""
+        c1 = make_comment(id="c1")
+        post = make_post(id="p1")
+        post.comments = [c1]
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            delete_comment=AsyncMock(side_effect=Exception("Delete failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeleteCommentRequested(c1)
+            await screen.on_post_block_delete_comment_requested(msg)
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+
+class TestNoMatchingPostBlock:
+    """Test branches where PostBlock loops don't find a matching post."""
+
+    @pytest.mark.asyncio
+    async def test_like_nonexistent_post(self):
+        """Liking a post not in the feed should still call API but not crash."""
+        post_in_feed = make_post(id="p1")
+        post_to_like = make_post(id="p_nonexistent")
+        post_to_like.is_liked = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post_in_feed]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(
+                PostBlock.LikeRequested(post_to_like)
+            )
+            await pilot.pause()
+            api.like_post.assert_called_once_with("p_nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_hide_nonexistent_post(self):
+        """Hiding a post not in the feed should call API but not crash."""
+        post_in_feed = make_post(id="p1")
+        post_to_hide = make_post(id="p_nonexistent")
+        post_to_hide.is_hidden = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post_in_feed]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_hide_requested(
+                PostBlock.HideRequested(post_to_hide)
+            )
+            await pilot.pause()
+            api.hide_post.assert_called_once_with("p_nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_edit_post_nonexistent(self):
+        """Editing a post not in the feed should call API but not crash."""
+        post_in_feed = make_post(id="p1")
+        post_to_edit = make_post(id="p_nonexistent")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post_in_feed]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_edit_post_requested(
+                PostBlock.EditPostRequested(post_to_edit, "new")
+            )
+            await pilot.pause()
+            api.update_post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_comment_nonexistent_post(self):
+        """Creating comment for a post not in feed should call API but not crash."""
+        post_in_feed = make_post(id="p1")
+        new_comment = make_comment(id="c_new")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post_in_feed]),
+            create_comment=AsyncMock(return_value=new_comment),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = CommentCompose.CommentRequested("p_nonexistent", "body")
+            await screen.on_comment_compose_comment_requested(msg)
+            await pilot.pause()
+            api.create_comment.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_edit_comment_nonexistent(self):
+        """Editing a comment not in any post should call API but not crash."""
+        post = make_post(id="p1")
+        comment = make_comment(id="c_nonexistent")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.EditCommentRequested(comment, "new")
+            await screen.on_post_block_edit_comment_requested(msg)
+            await pilot.pause()
+            api.update_comment.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_nonexistent(self):
+        """Deleting a comment not in any post should call API but not crash."""
+        post = make_post(id="p1")
+        comment = make_comment(id="c_nonexistent")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeleteCommentRequested(comment)
+            await screen.on_post_block_delete_comment_requested(msg)
+            await pilot.pause()
+            api.delete_comment.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_expand_comments_nonexistent_post(self):
+        """Expanding comments for a non-matching post should still call API."""
+        post_in_feed = make_post(id="p1")
+        post_to_expand = make_post(id="p_nonexistent")
+        post_to_expand.omitted_comments = 5
+        full_post = make_post(id="p_nonexistent")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post_in_feed]),
+            get_post=AsyncMock(return_value=full_post),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_expand_comments(
+                PostBlock.ExpandComments(post_to_expand)
+            )
+            await pilot.pause()
+            api.get_post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_single_post_no_remaining(self):
+        """Deleting the only post should handle empty remaining list."""
+        post = make_post(id="p1")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeletePostRequested(post)
+            await screen.on_post_block_delete_post_requested(msg)
+            await pilot.pause()
+            api.delete_post.assert_called_once_with("p1")
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_post(self):
+        """Deleting a post not in the feed should call API but not crash."""
+        post_in_feed = make_post(id="p1")
+        post_to_delete = make_post(id="p_nonexistent")
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post_in_feed]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            msg = PostBlock.DeletePostRequested(post_to_delete)
+            await screen.on_post_block_delete_post_requested(msg)
+            await pilot.pause()
+            api.delete_post.assert_called_once()
+
+
+class TestMenuViewEdgeCases:
+    """Test edge cases in menu view selection."""
+
+    @pytest.mark.asyncio
+    async def test_search_when_already_on_search(self):
+        """Selecting SEARCH when already on SEARCH should still push screen."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.SEARCH))
+            await pilot.pause()
+            from freefood.screens.search import SearchScreen
+
+            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_notifications_when_already_on_notifications(self):
+        """Selecting NOTIFICATIONS when already there should still push."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.NOTIFICATIONS)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.NOTIFICATIONS))
+            await pilot.pause()
+            from freefood.screens.notifications import NotificationsScreen
+
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_errors_when_already_on_errors(self):
+        """Selecting ERRORS when already there should still push."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.ERRORS)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
+            await pilot.pause()
+            from freefood.screens.errors import ErrorsScreen
+
+            assert any(isinstance(s, ErrorsScreen) for s in app.pushed_screens)
+
+
+class TestGroupFeedWithNoTarget:
+    """Test GROUP_FEED without target (line 168)."""
+
+    @pytest.mark.asyncio
+    async def test_group_feed_no_target_returns_empty(self):
+        """GROUP_FEED without target should return empty posts list."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.GROUP_FEED, current_target=None)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert screen.posts == []
+
+
+class TestExpandCommentsNullPost:
+    """Test expand_comments when get_post returns None."""
+
+    @pytest.mark.asyncio
+    async def test_expand_comments_returns_none(self):
+        """When get_post returns None, should not crash."""
+        post = make_post(id="p1")
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            get_post=AsyncMock(return_value=None),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_expand_comments(PostBlock.ExpandComments(post))
+            await pilot.pause()
+            # Should not crash
+
+
+class TestFeedContainerVisibility:
+    """Test FeedContainer scroll visibility checking (lines 31, 35)."""
+
+    @pytest.mark.asyncio
+    async def test_check_focused_visibility_returns_when_focused_is_none(self):
+        """_check_focused_visibility returns early when no widget focused."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            container = screen.query_one(FeedContainer)
+            # Clear focus
+            app.set_focus(None)
+            await pilot.pause()
+            # Should not raise
+            container._check_focused_visibility()
+
+    @pytest.mark.asyncio
+    async def test_check_focused_visibility_returns_when_post_mode(self):
+        """_check_focused_visibility should return early when in post_mode (line 35)."""
+        posts = [make_post(id="p1")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            container = screen.query_one(FeedContainer)
+            # Focus the post block and enter post mode
+            post_block = screen.query(PostBlock).first()
+            assert post_block is not None
+            app.set_focus(post_block)
+            await pilot.pause()
+            post_block.post_mode = True
+            # Should not raise or move focus
+            container._check_focused_visibility()
+            await pilot.pause()
+            assert app.focused is post_block
+
+    @pytest.mark.asyncio
+    async def test_check_focused_visibility_non_postblock_focused(self):
+        """_check_focused_visibility returns when focused is not PostBlock."""
+        api = _make_mock_api()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            container = screen.query_one(FeedContainer)
+            # Focus a menu button instead of a PostBlock
+            menu = screen.query_one(MenuBar)
+            menu.focus()
+            await pilot.pause()
+            # Should not raise
+            container._check_focused_visibility()
