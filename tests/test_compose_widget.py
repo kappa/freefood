@@ -442,3 +442,69 @@ class TestComposeBlockReset:
 
             # Should be collapsed
             assert compose.is_expanded is False
+
+
+class TestComposeBlockFocusTextareaException:
+    """Tests for _focus_textarea exception path (lines 116-117)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_textarea_exception_does_not_crash(self):
+        """_focus_textarea should handle exceptions gracefully."""
+        from freefood.widgets.compose import ComposeBlock
+
+        class TestApp(App):
+            def compose(self):
+                yield ComposeBlock()
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            compose = app.query_one(ComposeBlock)
+
+            # Call _focus_textarea when not expanded (no textarea exists)
+            # This should hit the except Exception: pass branch
+            compose._focus_textarea()
+            await pilot.pause()
+
+    @pytest.mark.asyncio
+    async def test_default_feeds_shown_in_expanded_state(self):
+        """ComposeBlock should show default feeds when expanded."""
+        from textual.widgets import Input
+
+        from freefood.widgets.compose import ComposeBlock
+
+        class TestApp(App):
+            def compose(self):
+                yield ComposeBlock(default_feeds="news, tech")
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            compose = app.query_one(ComposeBlock)
+
+            # Expand
+            compose.is_expanded = True
+            compose.refresh(recompose=True)
+            await pilot.pause()
+
+            post_to = app.query_one("#compose-post-to", Input)
+            assert post_to.value == "news, tech"
+
+    @pytest.mark.asyncio
+    async def test_escape_when_collapsed_does_nothing(self):
+        """Escape when already collapsed should do nothing."""
+        from freefood.widgets.compose import ComposeBlock
+
+        class TestApp(App):
+            def compose(self):
+                yield ComposeBlock()
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            compose = app.query_one(ComposeBlock)
+
+            # Not expanded
+            assert compose.is_expanded is False
+
+            # action_cancel should not crash
+            compose.action_cancel()
+            await pilot.pause()
+            assert compose.is_expanded is False

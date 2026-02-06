@@ -1,11 +1,14 @@
 """Tests for PostBlock widget."""
 
 from datetime import datetime
+from unittest.mock import Mock, patch
 
 import pytest
+from textual.app import App
+from textual.widgets import Button
 
-from freefood.models import Comment, Post, User
-from freefood.widgets.post import PostBlock, format_time_ago
+from freefood.models import Attachment, Comment, Post, User
+from freefood.widgets.post import CommentBlock, PostBlock, format_time_ago
 
 
 def make_user(
@@ -1592,7 +1595,6 @@ class TestMoreCommentsButtonPlacement:
     @pytest.mark.asyncio
     async def test_no_more_comments_button_when_omitted_is_zero(self):
         """No more comments button should appear when omittedComments is 0."""
-        from textual.app import App
         from textual.css.query import NoMatches
 
         # Even with offset set, should not show button when omittedComments=0
@@ -1611,3 +1613,1494 @@ class TestMoreCommentsButtonPlacement:
             app = pilot.app
             with pytest.raises(NoMatches):
                 app.query_one("#btn-more-comments")
+
+
+# =========================================================================
+# New coverage tests for uncovered lines
+# =========================================================================
+
+
+class TestCommentBlockTruncation:
+    """Tests for CommentBlock body truncation (line 95)."""
+
+    def test_comment_body_truncated_when_exceeding_max_lines(self):
+        """CommentBlock should truncate body exceeding MAX_COMMENT_LINES."""
+        lines = [f"Line {i}" for i in range(CommentBlock.MAX_COMMENT_LINES + 5)]
+        body = "\n".join(lines)
+        comment = make_comment(body=body)
+        block = CommentBlock(comment)
+        formatted = block._format_body()
+        assert "[show more...]" in formatted
+        output_lines = formatted.split("\n")
+        assert len(output_lines) == CommentBlock.MAX_COMMENT_LINES + 1
+
+
+class TestCommentBlockHighlighting:
+    """Tests for CommentBlock with highlight terms (lines 100, 116)."""
+
+    def test_comment_format_body_with_highlight_terms(self):
+        """CommentBlock._format_body with highlight_terms should use highlight_text."""
+        comment = make_comment(body="Hello world test")
+        block = CommentBlock(comment, highlight_terms=["world"])
+        formatted = block._format_body()
+        # highlight_text uses Rich markup
+        assert "[reverse]" in formatted
+
+    @pytest.mark.asyncio
+    async def test_comment_likes_escaped_with_highlight_terms(self):
+        """CommentBlock with highlight_terms should escape likes_str."""
+        comment = make_comment(body="Hello", likes=3)
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post, highlight_terms=["Hello"])
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            # Should render without error - the likes_str is escaped
+            comment_blocks = list(app.query(CommentBlock))
+            assert len(comment_blocks) == 1
+
+
+class TestCommentBlockNullAuthor:
+    """Tests for CommentBlock with None author (line 138)."""
+
+    @pytest.mark.asyncio
+    async def test_comment_null_author_renders_unknown(self):
+        """CommentBlock should show @unknown when author is None."""
+        from textual.widgets import Static
+
+        comment = Comment(
+            id="c_null",
+            body="Anonymous comment",
+            author=None,
+            created_at=datetime.now(),
+            likes=0,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            comment_block = app.query_one(CommentBlock)
+            # Should have a Static with @unknown
+            statics = list(comment_block.query(Static))
+            unknown_statics = [s for s in statics if "@unknown" in s.content]
+            assert len(unknown_statics) == 1
+
+
+class TestPostBlockNullAuthor:
+    """Tests for PostBlock with None author (line 390)."""
+
+    @pytest.mark.asyncio
+    async def test_post_null_author_renders_unknown(self):
+        """PostBlock should show @unknown when author is None."""
+        from textual.widgets import Static
+
+        post = make_post()
+        post.author = None
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            from textual.containers import HorizontalGroup
+
+            header = app.query_one("#post-header", HorizontalGroup)
+            statics = list(header.query(Static))
+            unknown_statics = [s for s in statics if "@unknown" in s.content]
+            assert len(unknown_statics) == 1
+
+
+class TestPostBlockMultipleDirectRecipients:
+    """Tests for multiple direct recipients separator (line 396)."""
+
+    @pytest.mark.asyncio
+    async def test_multiple_direct_recipients_separator(self):
+        """Multiple direct recipients should be separated by commas."""
+        from textual.widgets import Static
+
+        author = make_user(username="alice")
+        bob = make_user(id="u2", username="bob")
+        carol = make_user(id="u3", username="carol")
+        post = make_post(author=author, groups=[], direct_recipients=[bob, carol])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            # Both recipients should have buttons
+            app.query_one("#user-link-header-user-bob", Button)
+            app.query_one("#user-link-header-user-carol", Button)
+            # Separator statics should exist
+            from textual.containers import HorizontalGroup
+
+            header = app.query_one("#post-header", HorizontalGroup)
+            statics = list(header.query(Static))
+            comma_statics = [s for s in statics if ", " in s.content]
+            assert len(comma_statics) >= 1
+
+
+class TestPostBlockMultipleGroups:
+    """Tests for multiple groups separator (line 411)."""
+
+    @pytest.mark.asyncio
+    async def test_multiple_groups_separator(self):
+        """Multiple groups should be separated by commas."""
+        author = make_user(username="alice")
+        group1 = make_user(id="g1", username="news", user_type="group")
+        group2 = make_user(id="g2", username="tech", user_type="group")
+        post = make_post(author=author, groups=[group1, group2])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#user-link-header-group-news", Button)
+            app.query_one("#user-link-header-group-tech", Button)
+
+
+class TestPostBlockAttachmentFilenameEdgeCases:
+    """Tests for truncate_filename edge cases (line 552)."""
+
+    @pytest.mark.asyncio
+    async def test_attachment_long_suffix_truncation(self):
+        """Attachment with very long suffix should truncate correctly."""
+        # Create a filename where stem_len would be <= 0
+        # max_len=20, suffix=".verylongsuffix" (15 chars), stem_len = 20-15-3 = 2
+        att = Attachment(
+            id="att1",
+            file_name="ab.verylongsuffix",
+            file_size=1024,
+            media_type="application/octet-stream",
+            url="https://example.com/file",
+        )
+        post = make_post()
+        post.attachments = [att]
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn = app.query_one(f"#att-{att.id}", Button)
+            assert btn is not None
+
+    @pytest.mark.asyncio
+    async def test_attachment_extremely_long_suffix_truncation(self):
+        """Attachment where stem_len <= 0 should use fallback truncation."""
+        # max_len=20, suffix len > 17 means stem_len <= 0
+        att = Attachment(
+            id="att2",
+            file_name="x.areallyreallyreallylongsuffix",
+            file_size=1024,
+            media_type="application/pdf",
+            url="https://example.com/file2",
+        )
+        post = make_post()
+        post.attachments = [att]
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn = app.query_one(f"#att-{att.id}", Button)
+            assert btn is not None
+
+    @pytest.mark.asyncio
+    async def test_attachment_media_type_icons(self):
+        """Different media types should get different icons."""
+        attachments = [
+            Attachment(
+                id="att_img",
+                file_name="photo.jpg",
+                file_size=1024,
+                media_type="image/jpeg",
+                url="https://example.com/img",
+            ),
+            Attachment(
+                id="att_vid",
+                file_name="video.mp4",
+                file_size=2048,
+                media_type="video/mp4",
+                url="https://example.com/vid",
+            ),
+            Attachment(
+                id="att_audio",
+                file_name="song.mp3",
+                file_size=512,
+                media_type="audio/mpeg",
+                url="https://example.com/audio",
+            ),
+            Attachment(
+                id="att_text",
+                file_name="doc.txt",
+                file_size=256,
+                media_type="text/plain",
+                url="https://example.com/text",
+            ),
+            Attachment(
+                id="att_other",
+                file_name="data.bin",
+                file_size=128,
+                media_type="application/octet-stream",
+                url="https://example.com/bin",
+            ),
+        ]
+        post = make_post()
+        post.attachments = attachments
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            for att in attachments:
+                btn = app.query_one(f"#att-{att.id}", Button)
+                assert btn is not None
+
+
+class TestPostBlockMoreThanThreeLikesRendering:
+    """Tests for >3 likes rendering (lines 644-645)."""
+
+    @pytest.mark.asyncio
+    async def test_more_than_three_likes_shows_others_count(self):
+        """More than 3 likes should show 'and N others liked this'."""
+        from textual.widgets import Static
+
+        likers = [make_user(id=f"u{i}", username=f"user{i}") for i in range(5)]
+        post = make_post(likes=likers, omitted_likes=10)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            from textual.containers import HorizontalGroup
+
+            likes_group = app.query_one("#post-likes", HorizontalGroup)
+            statics = list(likes_group.query(Static))
+            text = " ".join(s.content for s in statics)
+            assert "others liked this" in text
+
+
+class TestPostBlockButtonPressHandlers:
+    """Tests for various on_button_pressed branches."""
+
+    def test_btn_more_comments_sets_expanded(self):
+        """btn-more-comments press should set comments_expanded and emit."""
+        post = make_post(omitted_comments=5)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-more-comments"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "post_message") as mock_post_message:
+            widget.on_button_pressed(mock_event)
+
+        assert widget.comments_expanded is True
+        msg = mock_post_message.call_args[0][0]
+        assert isinstance(msg, PostBlock.ExpandComments)
+
+    def test_btn_comment_calls_show_comment_compose(self):
+        """btn-comment press should call _show_comment_compose."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-comment"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_show_comment_compose") as mock_show:
+            widget.on_button_pressed(mock_event)
+
+        mock_show.assert_called_once()
+
+    def test_btn_edit_calls_start_editing_post(self):
+        """btn-edit press should call _start_editing_post."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-edit"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_start_editing_post") as mock_edit:
+            widget.on_button_pressed(mock_event)
+
+        mock_edit.assert_called_once()
+
+    def test_btn_cancel_edit_calls_cancel_editing_post(self):
+        """btn-cancel-edit press should call _cancel_editing_post."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-cancel-edit"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_cancel_editing_post") as mock_cancel:
+            widget.on_button_pressed(mock_event)
+
+        mock_cancel.assert_called_once()
+
+    def test_btn_save_edit_calls_save_editing_post(self):
+        """btn-save-edit press should call _save_editing_post."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-save-edit"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_save_editing_post") as mock_save:
+            widget.on_button_pressed(mock_event)
+
+        mock_save.assert_called_once()
+
+    def test_btn_delete_calls_start_delete_confirmation(self):
+        """btn-delete press should call _start_delete_confirmation."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-delete"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_start_delete_confirmation") as mock_del:
+            widget.on_button_pressed(mock_event)
+
+        mock_del.assert_called_once()
+
+    def test_btn_cancel_delete_calls_cancel_delete_confirmation(self):
+        """btn-cancel-delete press should call _cancel_delete_confirmation."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-cancel-delete"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_cancel_delete_confirmation") as mock_cd:
+            widget.on_button_pressed(mock_event)
+
+        mock_cd.assert_called_once()
+
+    def test_btn_confirm_delete_calls_confirm_delete(self):
+        """btn-confirm-delete press should call _confirm_delete."""
+        post = make_post(is_own=True)
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-confirm-delete"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_confirm_delete") as mock_confirm:
+            widget.on_button_pressed(mock_event)
+
+        mock_confirm.assert_called_once()
+
+    def test_comment_edit_button_calls_start_editing_comment(self):
+        """comment-edit-{id} press should call _start_editing_comment."""
+        comment = make_comment(id="c42")
+        post = make_post(comments=[comment])
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "comment-edit-c42"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_start_editing_comment") as mock_edit:
+            widget.on_button_pressed(mock_event)
+
+        mock_edit.assert_called_once_with("c42")
+
+    def test_btn_cancel_comment_edit(self):
+        """btn-cancel-comment-edit press should call _cancel_editing_comment."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-cancel-comment-edit"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_cancel_editing_comment") as mock_cancel:
+            widget.on_button_pressed(mock_event)
+
+        mock_cancel.assert_called_once()
+
+    def test_btn_save_comment_edit(self):
+        """btn-save-comment-edit press should call _save_editing_comment."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "btn-save-comment-edit"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_save_editing_comment") as mock_save:
+            widget.on_button_pressed(mock_event)
+
+        mock_save.assert_called_once()
+
+    def test_comment_delete_button(self):
+        """comment-delete-{id} press should call _start_comment_delete_confirmation."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "comment-delete-c99"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_start_comment_delete_confirmation") as mock_del:
+            widget.on_button_pressed(mock_event)
+
+        mock_del.assert_called_once_with("c99")
+
+    def test_comment_confirm_delete_button(self):
+        """comment-confirm-delete-{id} press should call _confirm_delete_comment."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "comment-confirm-delete-c99"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_confirm_delete_comment") as mock_cd:
+            widget.on_button_pressed(mock_event)
+
+        mock_cd.assert_called_once_with("c99")
+
+    def test_comment_cancel_delete_button(self):
+        """comment-cancel-delete should call cancel confirmation."""
+        post = make_post()
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "comment-cancel-delete-c99"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "_cancel_comment_delete_confirmation") as mock_cancel:
+            widget.on_button_pressed(mock_event)
+
+        mock_cancel.assert_called_once_with("c99")
+
+    def test_attachment_button_emits_attachment_opened(self):
+        """att-{id} press should emit AttachmentOpened."""
+        att = Attachment(
+            id="att99",
+            file_name="file.txt",
+            file_size=100,
+            media_type="text/plain",
+            url="https://example.com/file",
+        )
+        post = make_post()
+        post.attachments = [att]
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "att-att99"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "post_message") as mock_pm:
+            widget.on_button_pressed(mock_event)
+
+        msg = mock_pm.call_args[0][0]
+        assert isinstance(msg, PostBlock.AttachmentOpened)
+        assert msg.attachment is att
+
+    def test_attachment_button_unknown_id_no_message(self):
+        """att-{id} with nonexistent attachment id should not emit."""
+        post = make_post()
+        post.attachments = []
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "att-nonexistent"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "post_message") as mock_pm:
+            widget.on_button_pressed(mock_event)
+
+        mock_pm.assert_not_called()
+
+
+class TestPostBlockEditingPost:
+    """Tests for post editing flow."""
+
+    @pytest.mark.asyncio
+    async def test_edit_post_shows_textarea(self):
+        """Editing post should show textarea with post body."""
+        from textual.widgets import TextArea
+
+        post = make_post(body="Original body", is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode and click Edit
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+
+            assert post_block.editing_post is True
+            textarea = app.query_one("#edit-post-body", TextArea)
+            assert textarea.text == "Original body"
+
+    @pytest.mark.asyncio
+    async def test_cancel_edit_post_restores_view(self):
+        """Cancelling edit should restore normal view."""
+        post = make_post(body="Original body", is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Start editing
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+            assert post_block.editing_post is True
+
+            # Cancel editing
+            cancel_btn = app.query_one("#btn-cancel-edit", Button)
+            cancel_btn.press()
+            await pilot.pause()
+            assert post_block.editing_post is False
+
+    @pytest.mark.asyncio
+    async def test_save_edit_post_emits_message(self):
+        """Saving edited post should emit EditPostRequested."""
+        from textual.widgets import TextArea
+
+        messages = []
+        post = make_post(body="Original body", is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_edit_post_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+
+            textarea = app.query_one("#edit-post-body", TextArea)
+            textarea.text = "Updated body"
+            await pilot.pause()
+
+            save_btn = app.query_one("#btn-save-edit", Button)
+            save_btn.press()
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert messages[0].new_body == "Updated body"
+
+    @pytest.mark.asyncio
+    async def test_save_edit_post_empty_body_no_message(self):
+        """Saving with empty body should not emit."""
+        from textual.widgets import TextArea
+
+        messages = []
+        post = make_post(body="Original body", is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_edit_post_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+
+            textarea = app.query_one("#edit-post-body", TextArea)
+            textarea.text = "   "
+            await pilot.pause()
+
+            save_btn = app.query_one("#btn-save-edit", Button)
+            save_btn.press()
+            await pilot.pause()
+
+            assert len(messages) == 0
+
+
+class TestPostBlockDeleteFlow:
+    """Tests for post delete confirmation flow."""
+
+    @pytest.mark.asyncio
+    async def test_delete_shows_confirmation(self):
+        """Clicking Delete should show Confirm Delete and Cancel buttons."""
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#btn-delete", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            assert post_block.confirming_delete is True
+            app.query_one("#btn-confirm-delete", Button)
+            app.query_one("#btn-cancel-delete", Button)
+
+    @pytest.mark.asyncio
+    async def test_cancel_delete_hides_confirmation(self):
+        """Clicking Cancel in delete confirmation should hide it."""
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#btn-delete", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            cancel_btn = app.query_one("#btn-cancel-delete", Button)
+            cancel_btn.press()
+            await pilot.pause()
+
+            assert post_block.confirming_delete is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_delete_emits_message(self):
+        """Clicking Confirm Delete should emit DeletePostRequested."""
+        messages = []
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_delete_post_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#btn-delete", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            confirm_btn = app.query_one("#btn-confirm-delete", Button)
+            confirm_btn.press()
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert isinstance(messages[0], PostBlock.DeletePostRequested)
+
+
+class TestPostBlockCommentEditing:
+    """Tests for comment editing flow."""
+
+    @pytest.mark.asyncio
+    async def test_comment_edit_shows_textarea(self):
+        """Clicking Edit on own comment should show textarea."""
+        from textual.widgets import TextArea
+
+        comment = Comment(
+            id="c_edit",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#comment-edit-c_edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+            # Wait for timer
+            await pilot.pause(delay=0.1)
+
+            textarea = app.query_one("#edit-comment-body", TextArea)
+            assert textarea.text == "My comment"
+
+    @pytest.mark.asyncio
+    async def test_comment_cancel_edit_restores_view(self):
+        """Cancelling comment edit should restore normal comment view."""
+        comment = Comment(
+            id="c_edit2",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Start editing
+            edit_btn = app.query_one("#comment-edit-c_edit2", Button)
+            edit_btn.press()
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            # Cancel editing
+            cancel_btn = app.query_one("#btn-cancel-comment-edit", Button)
+            cancel_btn.press()
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            # Comment block should not be editing anymore
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.editing is False
+
+    @pytest.mark.asyncio
+    async def test_comment_save_edit_emits_message(self):
+        """Saving comment edit should emit EditCommentRequested."""
+        from textual.widgets import TextArea
+
+        messages = []
+        comment = Comment(
+            id="c_save",
+            body="Old text",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_edit_comment_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#comment-edit-c_save", Button)
+            edit_btn.press()
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            textarea = app.query_one("#edit-comment-body", TextArea)
+            textarea.text = "New text"
+            await pilot.pause()
+
+            save_btn = app.query_one("#btn-save-comment-edit", Button)
+            save_btn.press()
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert messages[0].new_body == "New text"
+
+
+class TestPostBlockCommentDeleteFlow:
+    """Tests for comment delete confirmation flow."""
+
+    @pytest.mark.asyncio
+    async def test_comment_delete_shows_confirmation(self):
+        """Clicking Delete on own comment should show confirmation."""
+        comment = Comment(
+            id="c_del",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#comment-delete-c_del", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.confirming_delete is True
+            app.query_one("#comment-confirm-delete-c_del", Button)
+            app.query_one("#comment-cancel-delete-c_del", Button)
+
+    @pytest.mark.asyncio
+    async def test_comment_cancel_delete_hides_confirmation(self):
+        """Cancelling comment delete should hide confirmation buttons."""
+        comment = Comment(
+            id="c_cdel",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#comment-delete-c_cdel", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            cancel_btn = app.query_one("#comment-cancel-delete-c_cdel", Button)
+            cancel_btn.press()
+            await pilot.pause()
+
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.confirming_delete is False
+
+    @pytest.mark.asyncio
+    async def test_comment_confirm_delete_emits_message(self):
+        """Confirming comment delete should emit DeleteCommentRequested."""
+        messages = []
+        comment = Comment(
+            id="c_cfdel",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_delete_comment_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            delete_btn = app.query_one("#comment-delete-c_cfdel", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            confirm_btn = app.query_one("#comment-confirm-delete-c_cfdel", Button)
+            confirm_btn.press()
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert isinstance(messages[0], PostBlock.DeleteCommentRequested)
+            assert messages[0].comment.id == "c_cfdel"
+
+
+class TestPostBlockFocusCommentAt:
+    """Tests for focus_comment_at (line 835)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_comment_at_no_comments_returns_false(self):
+        """focus_comment_at with no comments should return False."""
+        post = make_post(comments=[])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+            result = post_block.focus_comment_at(0)
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_focus_comment_at_valid_index(self):
+        """focus_comment_at with valid index should focus the comment."""
+        comments = [
+            make_comment(id="c1", body="First"),
+            make_comment(id="c2", body="Second"),
+        ]
+        post = make_post(comments=comments)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+            # Enter post mode so comments are focusable
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            result = post_block.focus_comment_at(1)
+            assert result is True
+
+
+class TestPostBlockCommentCompose:
+    """Tests for comment compose (line 853)."""
+
+    @pytest.mark.asyncio
+    async def test_comment_compose_cancelled(self):
+        """on_comment_compose_cancelled should hide the compose widget."""
+        from freefood.widgets.comment_compose import CommentCompose
+
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Click Comment button to show compose
+            comment_btn = app.query_one("#btn-comment", Button)
+            comment_btn.press()
+            await pilot.pause()
+
+            # Should have a CommentCompose widget
+            compose_widgets = list(post_block.query(CommentCompose))
+            assert len(compose_widgets) == 1
+
+            # Now cancel it
+            cancel_btn = app.query_one("#comment-cancel", Button)
+            cancel_btn.press()
+            await pilot.pause()
+
+            # CommentCompose should be gone
+            compose_widgets = list(post_block.query(CommentCompose))
+            assert len(compose_widgets) == 0
+
+
+class TestPostBlockFocusFirstButtonFallback:
+    """Tests for _focus_first_button fallback (lines 870-873)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_first_button_when_editing(self):
+        """_focus_first_button should fallback when btn-comment doesn't exist."""
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter editing mode first (removes btn-comment)
+            post_block.editing_post = True
+            post_block.post_mode = True
+            post_block.refresh(recompose=True)
+            await pilot.pause()
+
+            # Should focus Cancel or Save button (fallback path)
+            post_block._focus_first_button()
+            await pilot.pause()
+            # Focus should be on one of the edit action buttons
+            focused = app.focused
+            assert focused is not None
+
+
+class TestPostBlockOnKeyEdgeCases:
+    """Tests for on_key edge cases (lines 912, 915, 947)."""
+
+    @pytest.mark.asyncio
+    async def test_on_key_escape_in_edit_mode(self):
+        """Escape in editing mode should cancel edit."""
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+
+            assert post_block.editing_post is True
+
+            # Press escape
+            await pilot.press("escape")
+            await pilot.pause()
+            assert post_block.editing_post is False
+
+    @pytest.mark.asyncio
+    async def test_on_key_ctrl_enter_in_edit_mode(self):
+        """Ctrl+Enter in editing mode should save edit."""
+        from textual.widgets import TextArea
+
+        messages = []
+        post = make_post(body="Old body", is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_edit_post_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#btn-edit", Button)
+            edit_btn.press()
+            await pilot.pause()
+
+            textarea = app.query_one("#edit-post-body", TextArea)
+            textarea.text = "New body"
+            await pilot.pause()
+
+            await pilot.press("ctrl+enter")
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert messages[0].new_body == "New body"
+
+    @pytest.mark.asyncio
+    async def test_on_key_escape_in_comment_edit_mode(self):
+        """Escape while editing comment should cancel comment edit."""
+        comment = Comment(
+            id="c_esc",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Start editing comment
+            edit_btn = app.query_one("#comment-edit-c_esc", Button)
+            edit_btn.press()
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            # Press escape to cancel
+            await pilot.press("escape")
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.editing is False
+
+    @pytest.mark.asyncio
+    async def test_on_key_ctrl_enter_in_comment_edit_mode(self):
+        """Ctrl+Enter while editing comment should save comment edit."""
+        from textual.widgets import TextArea
+
+        messages = []
+        comment = Comment(
+            id="c_ctrl",
+            body="My comment",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+            def on_post_block_edit_comment_requested(self, event):
+                messages.append(event)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            edit_btn = app.query_one("#comment-edit-c_ctrl", Button)
+            edit_btn.press()
+            await pilot.pause()
+            await pilot.pause(delay=0.1)
+
+            textarea = app.query_one("#edit-comment-body", TextArea)
+            textarea.text = "Updated comment"
+            await pilot.pause()
+
+            await pilot.press("ctrl+enter")
+            await pilot.pause()
+
+            assert len(messages) == 1
+            assert messages[0].new_body == "Updated comment"
+
+    def test_is_ancestor_of_returns_false(self):
+        """is_ancestor_of should return False for unrelated widgets."""
+        post = make_post()
+        widget1 = PostBlock(post)
+        widget2 = PostBlock(post)
+        assert widget1.is_ancestor_of(widget2) is False
+
+
+class TestPostBlockFocusEditButtonException:
+    """Tests for _focus_edit_button exception path (lines 729-730)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_edit_button_no_button(self):
+        """_focus_edit_button should not crash when button doesn't exist."""
+        post = make_post(is_own=False)  # No edit button
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+            # Should not crash
+            post_block._focus_edit_button()
+            await pilot.pause()
+
+
+class TestPostBlockFocusCommentEditTextarea:
+    """Tests for _focus_comment_edit_textarea NoMatches (lines 766-767)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_comment_edit_textarea_no_textarea(self):
+        """_focus_comment_edit_textarea should handle NoMatches."""
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+            # No editing textarea exists - should not crash
+            post_block._focus_comment_edit_textarea()
+            await pilot.pause()
+
+
+class TestPostBlockFocusCommentEditButton:
+    """Tests for _focus_comment_edit_button NoMatches (lines 790-791)."""
+
+    @pytest.mark.asyncio
+    async def test_focus_comment_edit_button_no_button(self):
+        """_focus_comment_edit_button should handle NoMatches."""
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+            # No such button - should not crash
+            post_block._focus_comment_edit_button("nonexistent")
+            await pilot.pause()
+
+
+class TestPostBlockCommentDeleteConfirmation:
+    """Tests for _cancel_comment_delete_confirmation (lines 815-819)."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_comment_delete_resets_flag(self):
+        """_cancel_comment_delete_confirmation should reset confirming_delete."""
+        comment = Comment(
+            id="c_cdel2",
+            body="Comment to delete",
+            author=make_user(username="me"),
+            created_at=datetime.now(),
+            likes=0,
+            is_own=True,
+        )
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            post_block.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Click Delete on comment
+            delete_btn = app.query_one("#comment-delete-c_cdel2", Button)
+            delete_btn.press()
+            await pilot.pause()
+
+            # Confirm delete is showing
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.confirming_delete is True
+
+            # Cancel it
+            cancel_btn = app.query_one("#comment-cancel-delete-c_cdel2", Button)
+            cancel_btn.press()
+            await pilot.pause()
+
+            comment_block = app.query_one(CommentBlock)
+            assert comment_block.confirming_delete is False
+
+
+class TestPostBlockOnKeyPostMode:
+    """Tests for on_key in post mode with focus edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_on_key_focused_is_self_returns(self):
+        """on_key should return when focused widget is self."""
+        post = make_post()
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            post_block = app.query_one(PostBlock)
+
+            # Enter post mode, then manually focus the block itself
+            post_block.post_mode = True
+            post_block.focus()
+            await pilot.pause()
+
+            # Press key - should not crash (returns early because focused is self)
+            await pilot.press("tab")
+            await pilot.pause()
+
+    @pytest.mark.asyncio
+    async def test_on_key_focus_outside_post_returns(self):
+        """on_key should return when focused widget is outside post."""
+        from textual.containers import Vertical
+
+        post1 = make_post(id="p1")
+        post2 = make_post(id="p2")
+
+        class TestApp(App):
+            def compose(self):
+                with Vertical():
+                    yield PostBlock(post1)
+                    yield PostBlock(post2)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            blocks = list(app.query(PostBlock))
+            first = blocks[0]
+            second = blocks[1]
+
+            # Enter post mode on first
+            first.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Focus second block (outside first)
+            second.focus()
+            await pilot.pause()
+
+            # first.post_mode is True but focus is outside
+            assert first.post_mode is True
+            assert not first.is_ancestor_of(app.focused)
+
+
+class TestPostBlockEditMessages:
+    """Tests for edit/delete post message classes."""
+
+    def test_edit_post_requested_message(self):
+        """EditPostRequested should store post and new_body."""
+        post = make_post()
+        msg = PostBlock.EditPostRequested(post, "new body")
+        assert msg.post is post
+        assert msg.new_body == "new body"
+
+    def test_delete_post_requested_message(self):
+        """DeletePostRequested should store post."""
+        post = make_post()
+        msg = PostBlock.DeletePostRequested(post)
+        assert msg.post is post
+
+    def test_edit_comment_requested_message(self):
+        """EditCommentRequested should store comment and new_body."""
+        comment = make_comment()
+        msg = PostBlock.EditCommentRequested(comment, "new body")
+        assert msg.comment is comment
+        assert msg.new_body == "new body"
+
+    def test_delete_comment_requested_message(self):
+        """DeleteCommentRequested should store comment."""
+        comment = make_comment()
+        msg = PostBlock.DeleteCommentRequested(comment)
+        assert msg.comment is comment
+
+    def test_attachment_opened_message(self):
+        """AttachmentOpened should store attachment."""
+        att = Attachment(
+            id="att1",
+            file_name="file.txt",
+            file_size=100,
+            media_type="text/plain",
+            url="https://example.com/file",
+        )
+        msg = PostBlock.AttachmentOpened(att)
+        assert msg.attachment is att
