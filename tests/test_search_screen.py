@@ -1,12 +1,16 @@
 """Tests for SearchScreen behavior."""
 
 from datetime import datetime
+from unittest.mock import AsyncMock
 
 import pytest
+from textual.app import App
+from textual.widgets import Button, Input, Static
 
-from freefood.models import Post, User, View
+from freefood.models import HistoryEntry, Post, User, View
 from freefood.screens.search import SearchScreen
 from freefood.state import AppState
+from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
 
@@ -147,4 +151,568 @@ class TestSearchScreen:
             await pilot.pause()
 
             assert search_input.value == ""
+            screen.query_one("#search-empty", Static)
+
+
+class MockApp(App):
+    """App stub with screen tracking for navigation tests."""
+
+    def __init__(self, state: AppState | None = None, api: object | None = None):
+        super().__init__()
+        self.state = state or AppState()
+        self.api = api
+        self.pushed_screens: list = []
+        self._original_push = None
+
+    async def on_mount(self) -> None:
+        self._original_push = self.push_screen
+
+        def tracking_push(screen, *args, **kwargs):
+            self.pushed_screens.append(screen)
+            return self._original_push(screen, *args, **kwargs)
+
+        self.push_screen = tracking_push  # type: ignore[assignment]
+
+
+class TestSearchStateFallback:
+    """Tests for state property fallback."""
+
+    @pytest.mark.asyncio
+    async def test_state_falls_back_to_app_state(self):
+        """State should fall back to app.state when _state is None."""
+        api = FakeAPI([])
+        app_state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=app_state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state=None))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            assert screen.state is app_state
+
+
+class TestSearchAutoSearch:
+    """Tests for auto-search on mount with existing query."""
+
+    @pytest.mark.asyncio
+    async def test_auto_searches_when_query_present(self):
+        """SearchScreen should auto-search when state has a search_query."""
+        posts = [make_post(id="p1", body="Hello world")]
+        api = FakeAPI(posts)
+        state = AppState(current_view=View.SEARCH, search_query="hello")
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            assert api.calls == ["hello"]
+            assert screen.query(PostBlock).first() is not None
+
+
+class TestSearchNoResults:
+    """Tests for no results state."""
+
+    @pytest.mark.asyncio
+    async def test_shows_no_results_message(self):
+        """SearchScreen should show no results message when API returns empty."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            search_input.value = "nonexistent"
+            search_input.focus()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Should show "No results found"
+            container = screen.query_one("#search-results")
+            statics = container.query(Static)
+            texts = [str(s.render()) for s in statics]
+            assert any("No results" in t for t in texts)
+
+
+class TestSearchErrorHandling:
+    """Tests for error handling in search."""
+
+    @pytest.mark.asyncio
+    async def test_shows_error_when_api_is_none(self):
+        """Should show error when api is None."""
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=None)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            search_input.value = "test"
+            search_input.focus()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            error = screen.query_one(".error", Static)
+            assert "Not connected" in str(error.render())
+
+    @pytest.mark.asyncio
+    async def test_shows_error_when_api_raises(self):
+        """Should show error when api.search raises."""
+        api = AsyncMock()
+        api.search = AsyncMock(side_effect=Exception("Search failed"))
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            search_input.value = "test"
+            search_input.focus()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            error = screen.query_one(".error", Static)
+            assert "Search failed" in str(error.render())
+
+
+class TestSearchRefresh:
+    """Tests for the refresh action."""
+
+    @pytest.mark.asyncio
+    async def test_action_refresh_re_runs_search(self):
+        """action_refresh should re-run the search."""
+        posts = [make_post()]
+        api = FakeAPI(posts)
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            search_input.value = "test"
+            search_input.focus()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert len(api.calls) == 1
+
+            screen.action_refresh()
+            await pilot.pause()
+
+            assert len(api.calls) == 2
+
+
+class TestSearchClearOrFocusMenu:
+    """Tests for the clear_or_focus_menu action."""
+
+    @pytest.mark.asyncio
+    async def test_escape_with_empty_input_focuses_menu(self):
+        """Escape with empty input should focus the menu bar."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            assert search_input.value == ""
+
+            # Focus the input
+            search_input.focus()
+            await pilot.pause()
+
+            # Press escape -- should focus menu since input is empty
+            screen.action_clear_or_focus_menu()
+            await pilot.pause()
+
+            focused = app.focused
+            assert isinstance(focused, Button)
+
+
+class TestSearchButtonPressed:
+    """Tests for button pressed events."""
+
+    @pytest.mark.asyncio
+    async def test_clear_button_clears_input(self):
+        """Clear button should clear input and show empty state."""
+        posts = [make_post()]
+        api = FakeAPI(posts)
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            search_input = screen.query_one("#search-input", Input)
+            search_input.value = "test"
+            search_input.focus()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert screen.state.search_query == "test"
+
+            # Press clear button
+            clear_btn = screen.query_one("#clear-search", Button)
+            clear_btn.press()
+            await pilot.pause()
+
+            assert search_input.value == ""
+            assert screen.state.search_query == ""
+
+
+class TestSearchMenuNavigation:
+    """Tests for menu bar view selection navigation."""
+
+    @pytest.mark.asyncio
+    async def test_selecting_search_focuses_input(self):
+        """Selecting SEARCH view should focus the search input."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.SEARCH))
+            await pilot.pause()
+
+            focused = app.focused
+            assert isinstance(focused, Input)
+
+    @pytest.mark.asyncio
+    async def test_selecting_notifications_navigates(self):
+        """Selecting NOTIFICATIONS view should push NotificationsScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.NOTIFICATIONS))
+            await pilot.pause()
+
+            from freefood.screens.notifications import NotificationsScreen
+
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_selecting_errors_navigates(self):
+        """Selecting ERRORS view should push ErrorsScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
+            await pilot.pause()
+
+            from freefood.screens.errors import ErrorsScreen
+
+            assert any(isinstance(s, ErrorsScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_selecting_home_navigates_to_feed(self):
+        """Selecting HOME view should navigate to FeedScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+
+        class FeedMockApp(App):
+            """Special mock that tracks pop + checks screen."""
+
+            def __init__(self):
+                super().__init__()
+                self.state = state
+                self.api = api
+                self.popped = False
+
+            async def on_mount(self) -> None:
+                from freefood.screens.feed import FeedScreen
+
+                # Push a FeedScreen first so pop_screen works
+                self.push_screen(FeedScreen(self.state))
+
+        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            app = pilot.app
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.HOME))
+            await pilot.pause()
+
+            assert state.current_view == View.HOME
+
+    @pytest.mark.asyncio
+    async def test_selecting_directs_navigates_to_feed(self):
+        """Selecting DIRECTS view should navigate to FeedScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+
+        class FeedMockApp(App):
+            def __init__(self):
+                super().__init__()
+                self.state = state
+                self.api = api
+
+            async def on_mount(self) -> None:
+                from freefood.screens.feed import FeedScreen
+
+                self.push_screen(FeedScreen(self.state))
+
+        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            app = pilot.app
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.DIRECTS))
+            await pilot.pause()
+
+            assert state.current_view == View.DIRECTS
+
+
+class TestSearchBackNavigation:
+    """Tests for back navigation via menu bar."""
+
+    @pytest.mark.asyncio
+    async def test_back_with_no_history_notifies(self):
+        """Back with empty history should show notification."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            assert len(app._notifications) > 0
+            assert any("No history" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_back_to_home_returns_to_feed(self):
+        """Back to HOME should navigate to FeedScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        state.history.append(
+            HistoryEntry(view=View.HOME, target=None, scroll_position=0)
+        )
+
+        class FeedMockApp(App):
+            def __init__(self):
+                super().__init__()
+                self.state = state
+                self.api = api
+
+            async def on_mount(self) -> None:
+                from freefood.screens.feed import FeedScreen
+
+                self.push_screen(FeedScreen(self.state))
+
+        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            app = pilot.app
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            assert state.current_view == View.HOME
+
+    @pytest.mark.asyncio
+    async def test_back_to_search_refreshes(self):
+        """Back to SEARCH should refresh results with the saved query."""
+        posts = [make_post()]
+        api = FakeAPI(posts)
+        state = AppState(current_view=View.SEARCH)
+        state.history.append(
+            HistoryEntry(view=View.SEARCH, target=None, scroll_position=0, query="old")
+        )
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            assert state.current_view == View.SEARCH
+            assert state.search_query == "old"
+
+    @pytest.mark.asyncio
+    async def test_back_to_notifications_pushes_notifications_screen(self):
+        """Back to NOTIFICATIONS should push NotificationsScreen."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        state.history.append(
+            HistoryEntry(view=View.NOTIFICATIONS, target=None, scroll_position=0)
+        )
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            from freefood.screens.notifications import NotificationsScreen
+
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+            assert state.current_view == View.NOTIFICATIONS
+
+    @pytest.mark.asyncio
+    async def test_back_restores_target(self):
+        """Back should restore current_target from history entry."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        state.history.append(
+            HistoryEntry(view=View.USER_FEED, target="bob", scroll_position=0)
+        )
+
+        class FeedMockApp(App):
+            def __init__(self):
+                super().__init__()
+                self.state = state
+                self.api = api
+
+            async def on_mount(self) -> None:
+                from freefood.screens.feed import FeedScreen
+
+                self.push_screen(FeedScreen(self.state))
+
+        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            app = pilot.app
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            assert state.current_view == View.USER_FEED
+            assert state.current_target == "bob"
+
+    @pytest.mark.asyncio
+    async def test_back_with_query_none_does_not_overwrite(self):
+        """Back entry with query=None should not modify search_query."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH, search_query="existing")
+        state.history.append(
+            HistoryEntry(view=View.HOME, target=None, scroll_position=0, query=None)
+        )
+
+        class FeedMockApp(App):
+            def __init__(self):
+                super().__init__()
+                self.state = state
+                self.api = api
+
+            async def on_mount(self) -> None:
+                from freefood.screens.feed import FeedScreen
+
+                self.push_screen(FeedScreen(self.state))
+
+        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
+            await pilot.pause()
+            app = pilot.app
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            # query should not be overwritten
+            assert state.search_query == "existing"
+
+
+class TestSearchRefreshEmptyQuery:
+    """Tests for refresh with empty query."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_empty_query_shows_empty_state(self):
+        """Refreshing with empty query should show empty state."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, SearchScreen)
+            # Input is empty by default
+            screen.action_refresh()
+            await pilot.pause()
+
             screen.query_one("#search-empty", Static)
