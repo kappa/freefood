@@ -62,6 +62,12 @@ def get_username() -> str | None:
     return config.get("user", "username", fallback=None)
 
 
+def get_attachment_open_mode() -> str:
+    """Get attachment open mode (native or browser, defaults to native)."""
+    config = load_config()
+    return config.get("attachments", "open_mode", fallback="native")
+
+
 def save_token(token: str, username: str) -> None:
     """Save auth token and username, preserving other settings."""
     config = load_config()

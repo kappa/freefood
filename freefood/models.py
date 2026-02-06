@@ -30,6 +30,18 @@ class Comment:
 
 
 @dataclass
+class Attachment:
+    """A file attachment on a post."""
+
+    id: str
+    file_name: str
+    file_size: int
+    media_type: str
+    url: str
+    thumbnail_url: str | None = None
+
+
+@dataclass
 class Post:
     """A FreeFeed post."""
 
@@ -45,6 +57,7 @@ class Post:
     omitted_comment_likes: int
     omitted_likes: int
     likes: list[User]
+    attachments: list[Attachment] = field(default_factory=list)
     direct_recipients: list[User] = field(default_factory=list)
     is_liked: bool = False
     is_hidden: bool = False
@@ -73,6 +86,7 @@ class View(Enum):
     SEARCH = "search"
     USER_FEED = "user_feed"
     GROUP_FEED = "group_feed"
+    ERRORS = "errors"
 
 
 @dataclass

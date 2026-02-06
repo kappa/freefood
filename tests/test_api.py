@@ -154,6 +154,75 @@ async def test_denormalize_posts_sets_direct_recipients():
     assert [u.username for u in posts[0].direct_recipients] == ["bob"]
 
 
+def test_get_attachment_url_explicit():
+    """_get_attachment_url should use provided url."""
+    api = FreeFeedAPI("token")
+    data = {"id": "att1", "url": "/v4/attachments/att1/original"}
+    url = api._get_attachment_url(data)
+    # httpx.URL.join makes it absolute
+    assert url == "https://freefeed.net/v4/attachments/att1/original"
+
+
+def test_get_attachment_url_constructed():
+    """_get_attachment_url should construct /original URL if url is missing."""
+    api = FreeFeedAPI("token")
+    data = {"id": "att1"}
+    url = api._get_attachment_url(data)
+    assert "/v4/attachments/att1/original?redirect=" in url
+
+
+def test_get_attachment_url_missing_id():
+    """_get_attachment_url should return None if ID is missing."""
+    api = FreeFeedAPI("token")
+    data = {"fileName": "test.jpg"}
+    url = api._get_attachment_url(data)
+    assert url is None
+
+
+@pytest.mark.asyncio
+async def test_denormalize_posts_includes_attachments():
+    """denormalize_posts should include attachments."""
+    api = FreeFeedAPI("test-token")
+    api.current_user = User(id="me", username="me", screen_name="Me", type="user")
+
+    normalized_data = {
+        "posts": [
+            {
+                "id": "p1",
+                "body": "Post with attachment",
+                "createdBy": "me",
+                "createdAt": "1706097600000",
+                "updatedAt": "1706097600000",
+                "comments": [],
+                "likes": [],
+                "postedTo": [],
+                "attachments": ["att1"],
+                "omittedComments": 0,
+                "omittedLikes": 0,
+            }
+        ],
+        "attachments": [
+            {
+                "id": "att1",
+                "fileName": "test.jpg",
+                "fileSize": 1024,
+                "mediaType": "image/jpeg",
+            }
+        ],
+        "users": [{"id": "me", "username": "me", "screenName": "Me", "type": "user"}],
+    }
+
+    posts = api._denormalize_posts(normalized_data)
+
+    assert len(posts) == 1
+    post = posts[0]
+    assert len(post.attachments) == 1
+    att = post.attachments[0]
+    assert att.id == "att1"
+    assert att.file_name == "test.jpg"
+    assert "/v4/attachments/att1/original?redirect=" in att.url
+
+
 @pytest.mark.asyncio
 async def test_get_home_feed():
     """get_home_feed should return list of posts."""

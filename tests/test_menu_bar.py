@@ -39,3 +39,18 @@ async def test_menu_bar_updates_directs_count():
         bar.set_directs_count(2)
         button = bar.query_one("#directs-button", Button)
         assert button.label.plain == "Directs (2)"
+
+
+@pytest.mark.asyncio
+async def test_menu_bar_has_errors_button():
+    """MenuBar should have an Errors button."""
+    from textual.app import App
+    from textual.widgets import Button
+
+    class TestApp(App):
+        def compose(self):
+            yield MenuBar()
+
+    async with TestApp().run_test() as pilot:
+        button = pilot.app.query_one("#errors-button", Button)
+        assert button.label.plain == "Errors"

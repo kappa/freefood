@@ -3,9 +3,8 @@
 from datetime import datetime
 
 import httpx
-
-from .models import Comment, Post, User, Notification
-
+from httpx import URL
+from .models import Attachment, Comment, Post, User, Notification
 
 class FreeFeedAPI:
     """Async client for FreeFeed API."""
@@ -72,6 +71,27 @@ class FreeFeedAPI:
             is_own=is_own,
         )
 
+    def _get_attachment_url(self, attachment_data: dict) -> str | None:
+        """Constructs an attachment URL based on available data."""
+        att_id = attachment_data.get("id")
+
+        if not att_id:
+            return None
+        
+        # Priority 1: Check if 'url' is directly provided (as per design spec)
+        if attachment_data.get("url"):
+            # Ensure base_url is also joined with the raw URL if it's relative
+            return str(URL(self.base_url).join(attachment_data["url"]))
+
+        # Priority 2: Use the /v4/attachments/{id}/original?redirect= pattern for direct download
+        # Use httpx.URL for robust path joining
+        base_url_obj = URL(self.base_url)
+        constructed_path = f"/v4/attachments/{att_id}/original"
+        final_url_obj = base_url_obj.join(constructed_path).copy_with(params={"redirect": ""})
+
+        constructed_url = str(final_url_obj)
+        return constructed_url
+
     def _denormalize_posts(self, data: dict) -> list[Post]:
         """Convert normalized API response to Post objects."""
         users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
@@ -87,6 +107,20 @@ class FreeFeedAPI:
             c["id"]: self._parse_comment(c, users_by_id)
             for c in data.get("comments", [])
         }
+        attachments_by_id = {} # Initialize the dictionary
+        for a in data.get("attachments", []):
+            attachment_url = self._get_attachment_url(a)
+            if not attachment_url:
+                continue
+
+            attachments_by_id[a["id"]] = Attachment(
+                id=a["id"],
+                file_name=a.get("fileName", ""),
+                file_size=int(a.get("fileSize", 0)),
+                media_type=a.get("mediaType", ""),
+                url=attachment_url,
+                thumbnail_url=a.get("thumbnailUrl"),
+            )
 
         # Handle both list (timelines) and dict (single post) response formats
         posts_data = data.get("posts", [])
@@ -103,6 +137,11 @@ class FreeFeedAPI:
             ]
             post_likes = [
                 users_by_id[uid] for uid in p.get("likes", []) if uid in users_by_id
+            ]
+            post_attachments = [
+                attachments_by_id[aid]
+                for aid in p.get("attachments", [])
+                if aid in attachments_by_id
             ]
             groups = [
                 users_by_id[fid]
@@ -140,6 +179,7 @@ class FreeFeedAPI:
                     omitted_comment_likes=p.get("omittedCommentLikes", 0),
                     omitted_likes=p.get("omittedLikes", 0),
                     likes=post_likes,
+                    attachments=post_attachments,
                     direct_recipients=direct_recipients,
                     is_liked=p.get("hasOwnLike", False),
                     is_hidden=p.get("isHidden", False),

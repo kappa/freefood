@@ -150,6 +150,13 @@ class SearchScreen(Screen):
             self.app.push_screen(NotificationsScreen(self.state))
             return
 
+        if message.view == View.ERRORS:
+            self.state.navigate_to(View.ERRORS)
+            from freefood.screens.errors import ErrorsScreen
+
+            self.app.push_screen(ErrorsScreen())
+            return
+
         self.state.navigate_to(message.view)
         self._return_to_feed()
 

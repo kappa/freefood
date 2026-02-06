@@ -1,6 +1,7 @@
 """Post block widget for displaying posts."""
 
 from datetime import datetime
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, HorizontalGroup, Vertical, VerticalGroup
@@ -8,7 +9,7 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static, Button, TextArea
 
-from freefood.models import Post, Comment
+from freefood.models import Post, Comment, Attachment
 from freefood.search import highlight_text
 from freefood.widgets.comment_compose import CommentCompose
 from rich.markup import escape
@@ -249,6 +250,19 @@ class PostBlock(Widget, can_focus=True):
         margin-right: 1;
     }
 
+    PostBlock .post-attachments {
+        height: auto;
+        margin-top: 1;
+    }
+
+    PostBlock .attachment-btn {
+        min-width: 8;
+        height: 1;
+        border: none;
+        margin-right: 1;
+        background: $surface;
+    }
+
     PostBlock .show-more {
         color: $text-muted;
         margin: 0;
@@ -340,6 +354,13 @@ class PostBlock(Widget, can_focus=True):
             self.comment = comment
             super().__init__()
 
+    class AttachmentOpened(Message):
+        """Request to open an attachment."""
+
+        def __init__(self, attachment: Attachment) -> None:
+            self.attachment = attachment
+            super().__init__()
+
     def __init__(self, post: Post, highlight_terms: list[str] | None = None) -> None:
         """Initialize post widget."""
         super().__init__()
@@ -415,6 +436,9 @@ class PostBlock(Widget, can_focus=True):
                     btn = Button("Show more...", id="show-more-body", classes="show-more")
                     btn.can_focus = self.post_mode
                     yield btn
+
+                # Attachments
+                yield from self._render_attachments()
 
                 # Timestamp
                 yield Static(format_time_ago(self.post.created_at), classes="post-meta")
@@ -493,6 +517,41 @@ class PostBlock(Widget, can_focus=True):
             names = ", ".join(f"@{u.username}" for u in likes[:3])
             others = len(likes) - 3 + self.post.omitted_likes
             return f"♥ {names} and {others} others liked this"
+
+    def _render_attachments(self):
+        """Render attachment buttons."""
+        if not self.post.attachments:
+            return
+
+        def get_icon(media_type: str) -> str:
+            if media_type.startswith("image/"):
+                return "📷"
+            if media_type.startswith("video/"):
+                return "🎬"
+            if media_type.startswith("audio/"):
+                return "🎵"
+            if media_type.startswith("text/") or media_type == "application/pdf":
+                return "📄"
+            return "📎"
+
+        def truncate_filename(name: str, max_len: int = 20) -> str:
+            if len(name) <= max_len:
+                return name
+            stem = Path(name).stem
+            suffix = Path(name).suffix
+            # Allow some space for the suffix
+            stem_len = max_len - len(suffix) - 3
+            if stem_len > 0:
+                return f"{stem[:stem_len]}...{suffix}"
+            return f"{name[:max_len-3]}..."
+
+        with Horizontal(classes="post-attachments"):
+            for att in self.post.attachments:
+                icon = get_icon(att.media_type)
+                label = f"[{icon} {truncate_filename(att.file_name)}]"
+                btn = Button(label, id=f"att-{att.id}", classes="attachment-btn")
+                btn.can_focus = self.post_mode
+                yield btn
 
     def _render_comments(self):
         """Render comments section.
@@ -620,6 +679,11 @@ class PostBlock(Widget, can_focus=True):
         elif event.button.id and event.button.id.startswith("comment-cancel-delete-"):
             comment_id = event.button.id[len("comment-cancel-delete-"):]
             self._cancel_comment_delete_confirmation(comment_id)
+        elif event.button.id and event.button.id.startswith("att-"):
+            att_id = event.button.id[len("att-"):]
+            attachment = next((a for a in self.post.attachments if a.id == att_id), None)
+            if attachment:
+                self.post_message(self.AttachmentOpened(attachment))
 
     def _start_editing_post(self) -> None:
         """Enter post edit mode."""

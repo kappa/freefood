@@ -122,6 +122,13 @@ class NotificationsScreen(BaseScreen):
         if message.view == View.NOTIFICATIONS:
             return
 
+        if message.view == View.ERRORS:
+            self.state.navigate_to(View.ERRORS)
+            from freefood.screens.errors import ErrorsScreen
+
+            self.app.push_screen(ErrorsScreen())
+            return
+
         if message.view != self.state.current_view:
             self.state.navigate_to(message.view)
         from freefood.screens.feed import FeedScreen

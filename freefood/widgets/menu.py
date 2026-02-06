@@ -71,6 +71,7 @@ class MenuBar(Widget):
             yield Button("Notifications", id="notifications-button")
             yield Button("Directs", id="directs-button")
             yield Button("Search", id="search-button")
+            yield Button("Errors", id="errors-button")
 
     def on_mount(self) -> None:
         """Highlight current view on mount."""
@@ -83,6 +84,7 @@ class MenuBar(Widget):
             View.NOTIFICATIONS: "notifications-button",
             View.DIRECTS: "directs-button",
             View.SEARCH: "search-button",
+            View.ERRORS: "errors-button",
         }
 
         for view, button_id in view_to_button.items():
@@ -104,6 +106,7 @@ class MenuBar(Widget):
             "notifications-button": View.NOTIFICATIONS,
             "directs-button": View.DIRECTS,
             "search-button": View.SEARCH,
+            "errors-button": View.ERRORS,
         }
 
         if event.button.id == "back-button":
@@ -145,6 +148,7 @@ class MenuBar(Widget):
             View.NOTIFICATIONS: "notifications-button",
             View.DIRECTS: "directs-button",
             View.SEARCH: "search-button",
+            View.ERRORS: "errors-button",
         }
         button_id = view_to_button.get(self.current_view, "home-button")
         self.query_one(f"#{button_id}", Button).focus()

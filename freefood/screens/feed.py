@@ -5,7 +5,7 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Static, Button
 
-from freefood.config import get_username
+from freefood.config import get_username, get_attachment_open_mode
 from freefood.models import View, Post
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
@@ -294,6 +294,13 @@ class FeedScreen(BaseScreen):
             from freefood.screens.notifications import NotificationsScreen
 
             self.app.push_screen(NotificationsScreen(self.state))
+            return
+        if message.view == View.ERRORS:
+            if self.state.current_view != View.ERRORS:
+                self.state.navigate_to(View.ERRORS)
+            from freefood.screens.errors import ErrorsScreen
+
+            self.app.push_screen(ErrorsScreen())
             return
 
         if message.view != self.state.current_view:
