@@ -1,6 +1,7 @@
 """Main Textual application for FreeFood."""
 
 import uuid
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer
@@ -11,8 +12,8 @@ from freefood.config import get_base_url, get_token, save_token
 from freefood.logging import log_error
 from freefood.models import View
 from freefood.screens.auth import AuthScreen
-from freefood.screens.feed import FeedScreen
 from freefood.screens.errors import ErrorsScreen
+from freefood.screens.feed import FeedScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
@@ -35,7 +36,7 @@ class FreeFoodApp(App):
         self.state = AppState()
         # The token is not available at init time, so it will be set later.
         # This is okay because attachments are only downloaded after login.
-        self.attachments = AttachmentManager(str(uuid.uuid4()), token="") 
+        self.attachments = AttachmentManager(str(uuid.uuid4()), token="")
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
@@ -56,7 +57,7 @@ class FreeFoodApp(App):
         try:
             user = await self.api.validate_token()
             save_token(token, user.username)
-            self.attachments.token = token # Update the token in AttachmentManager
+            self.attachments.token = token  # Update the token in AttachmentManager
             self.push_screen(FeedScreen())
             self.notify(f"Welcome, {user.screen_name}!")
         except Exception as e:

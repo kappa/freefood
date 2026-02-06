@@ -1,7 +1,7 @@
 """Search screen for querying posts."""
 
 from textual.app import ComposeResult
-from textual.containers import ScrollableContainer, Horizontal, Vertical
+from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Input, Static
 
@@ -58,7 +58,9 @@ class SearchScreen(Screen):
                 yield Input(placeholder="Search...", id="search-input")
                 yield Button("Clear", id="clear-search")
             with ScrollableContainer(id="search-results"):
-                yield Static("Enter a search query", id="search-empty", classes="loading")
+                yield Static(
+                    "Enter a search query", id="search-empty", classes="loading"
+                )
 
     async def on_mount(self) -> None:
         self.state.current_view = View.SEARCH

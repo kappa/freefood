@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from freefood.models import Post, User, Comment
+from freefood.models import Comment, Post, User
 from freefood.widgets.post import PostBlock, format_time_ago
 
 
@@ -106,7 +106,7 @@ class TestPostBlockBindings:
     def test_on_key_method_exists(self):
         """PostBlock should have on_key method for escape handling in post mode."""
         assert hasattr(PostBlock, "on_key")
-        assert callable(getattr(PostBlock, "on_key"))
+        assert callable(PostBlock.on_key)
 
 
 class TestPostBlockConstants:
@@ -133,7 +133,7 @@ class TestPostBlockBodyTruncation:
         assert widget._body_is_truncated() is False
 
     def test_body_is_truncated_exactly_max_lines(self):
-        """_body_is_truncated should return False when body is exactly MAX_BODY_LINES."""
+        """_body_is_truncated returns False when body is exactly MAX_BODY_LINES."""
         lines = ["Line"] * PostBlock.MAX_BODY_LINES
         body = "\n".join(lines)
         post = make_post(body=body)
@@ -227,7 +227,7 @@ class TestPostBlockFormattingInFeedMode:
 
     def test_format_body_truncated(self):
         """_format_body should truncate long body and add indicator."""
-        lines = ["Line {}".format(i) for i in range(PostBlock.MAX_BODY_LINES + 10)]
+        lines = [f"Line {i}" for i in range(PostBlock.MAX_BODY_LINES + 10)]
         body = "\n".join(lines)
         post = make_post(body=body)
         widget = PostBlock(post)
@@ -240,7 +240,7 @@ class TestPostBlockFormattingInFeedMode:
 
     def test_format_body_expanded(self):
         """_format_body should return full body when expanded."""
-        lines = ["Line {}".format(i) for i in range(PostBlock.MAX_BODY_LINES + 10)]
+        lines = [f"Line {i}" for i in range(PostBlock.MAX_BODY_LINES + 10)]
         body = "\n".join(lines)
         post = make_post(body=body)
         widget = PostBlock(post)
@@ -495,6 +495,7 @@ class TestPostBlockOnButtonPressed:
     def test_show_more_body_sets_body_expanded(self):
         """on_button_pressed should set body_expanded=True for show-more-body."""
         from unittest.mock import Mock, patch
+
         from textual.widgets import Button
 
         lines = ["Line"] * (PostBlock.MAX_BODY_LINES + 10)
@@ -512,7 +513,7 @@ class TestPostBlockOnButtonPressed:
         mock_event.button = mock_button
 
         # Patch refresh to prevent actual refresh call
-        with patch.object(widget, 'refresh'):
+        with patch.object(widget, "refresh"):
             widget.on_button_pressed(mock_event)
 
         # Verify body_expanded is now True
@@ -955,7 +956,9 @@ class TestCommentBlockFocusable:
             assert len(comment_widgets) > 0, "No CommentBlock widgets found"
 
             for cw in comment_widgets:
-                assert cw.can_focus is False, "Comment should not be focusable outside post mode"
+                assert cw.can_focus is False, (
+                    "Comment should not be focusable outside post mode"
+                )
 
     @pytest.mark.asyncio
     async def test_can_navigate_to_comment_in_post_mode(self):
@@ -989,7 +992,9 @@ class TestCommentBlockFocusable:
             from freefood.widgets.post import CommentBlock
 
             focused = app.focused
-            assert isinstance(focused, CommentBlock), f"Expected CommentBlock, got {type(focused)}"
+            assert isinstance(focused, CommentBlock), (
+                f"Expected CommentBlock, got {type(focused)}"
+            )
 
 
 class TestMoreCommentsButton:
@@ -1020,7 +1025,9 @@ class TestMoreCommentsButton:
             # Find the more-comments button - it should exist and be focusable
             more_btn = app.query_one("#btn-more-comments", Button)
             assert more_btn is not None, "More comments button not found"
-            assert more_btn.can_focus is True, "More comments button should be focusable"
+            assert more_btn.can_focus is True, (
+                "More comments button should be focusable"
+            )
 
     @pytest.mark.asyncio
     async def test_more_comments_button_not_focusable_outside_post_mode(self):
@@ -1046,13 +1053,14 @@ class TestMoreCommentsButton:
             # The more-comments button should exist but not be focusable
             more_btn = app.query_one("#btn-more-comments", Button)
             assert more_btn is not None, "More comments button not found"
-            assert more_btn.can_focus is False, "More comments button should not be focusable outside post mode"
+            assert more_btn.can_focus is False, (
+                "More comments button should not be focusable outside post mode"
+            )
 
     @pytest.mark.asyncio
     async def test_can_navigate_to_more_comments_button(self):
         """Should be able to navigate to more comments button in post mode."""
         from textual.app import App
-        from textual.widgets import Button
 
         # Create a post with omitted comments
         post = make_post(omitted_comments=5)
@@ -1079,7 +1087,9 @@ class TestMoreCommentsButton:
 
             # Should be focused on more-comments button
             focused = app.focused
-            assert focused.id == "btn-more-comments", f"Expected btn-more-comments, got {focused.id}"
+            assert focused.id == "btn-more-comments", (
+                f"Expected btn-more-comments, got {focused.id}"
+            )
 
     @pytest.mark.asyncio
     async def test_more_comments_button_with_offset_in_middle(self):
@@ -1112,7 +1122,9 @@ class TestMoreCommentsButton:
             # Find the more-comments button
             more_btn = app.query_one("#btn-more-comments", Button)
             assert more_btn is not None, "More comments button not found"
-            assert more_btn.can_focus is True, "More comments button should be focusable"
+            assert more_btn.can_focus is True, (
+                "More comments button should be focusable"
+            )
 
 
 class TestPostModeNavigation:
@@ -1391,6 +1403,7 @@ class TestPostModeNavigation:
         """Tab from a comment should focus its author user link."""
         from textual.app import App
         from textual.widgets import Button
+
         from freefood.widgets.post import CommentBlock
 
         author = make_user(username="bob")
@@ -1459,7 +1472,6 @@ class TestMoreCommentsButtonPlacement:
     async def test_more_comments_button_at_offset_position(self):
         """More comments button should be placed at omittedCommentsOffset position."""
         from textual.app import App
-        from textual.widgets import Button
 
         # 3 comments, with 10 omitted after first comment (offset=1)
         comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(3)]
@@ -1519,7 +1531,6 @@ class TestMoreCommentsButtonPlacement:
     async def test_more_comments_button_at_offset_zero(self):
         """More comments button at offset 0 should appear before all comments."""
         from textual.app import App
-        from textual.widgets import Button
 
         comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(2)]
         post = make_post(
@@ -1537,7 +1548,9 @@ class TestMoreCommentsButtonPlacement:
             app = pilot.app
             from freefood.widgets.post import CommentBlock
 
-            children = list(app.query_one(PostBlock).query("CommentBlock, #btn-more-comments"))
+            children = list(
+                app.query_one(PostBlock).query("CommentBlock, #btn-more-comments")
+            )
 
             # Order should be: btn-more-comments, Comment0, Comment1
             assert len(children) == 3
@@ -1547,9 +1560,8 @@ class TestMoreCommentsButtonPlacement:
 
     @pytest.mark.asyncio
     async def test_more_comments_button_at_end(self):
-        """More comments button at offset=len(comments) should appear after all comments."""
+        """More comments button at offset=len(comments) appears after all comments."""
         from textual.app import App
-        from textual.widgets import Button
 
         comments = [make_comment(id=f"c{i}", body=f"Comment {i}") for i in range(2)]
         post = make_post(
@@ -1567,7 +1579,9 @@ class TestMoreCommentsButtonPlacement:
             app = pilot.app
             from freefood.widgets.post import CommentBlock
 
-            children = list(app.query_one(PostBlock).query("CommentBlock, #btn-more-comments"))
+            children = list(
+                app.query_one(PostBlock).query("CommentBlock, #btn-more-comments")
+            )
 
             # Order should be: Comment0, Comment1, btn-more-comments
             assert len(children) == 3

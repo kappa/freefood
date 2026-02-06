@@ -1,7 +1,7 @@
 """Smoke tests for FreeFoodApp."""
 
-import pytest
 from freefood.app import FreeFoodApp
+
 
 def test_app_importable():
     """Test that the app class can be imported and instantiated."""

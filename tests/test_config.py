@@ -5,7 +5,13 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from freefood.config import get_config_path, get_token, load_config, save_config, save_token
+from freefood.config import (
+    get_config_path,
+    get_token,
+    load_config,
+    save_config,
+    save_token,
+)
 
 
 def test_get_config_path_returns_path():
@@ -29,7 +35,9 @@ def test_get_config_path_contains_freefood():
 def test_load_config_returns_configparser():
     """load_config should return a ConfigParser."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("freefood.config.get_config_path", return_value=Path(tmpdir) / "config.ini"):
+        with patch(
+            "freefood.config.get_config_path", return_value=Path(tmpdir) / "config.ini"
+        ):
             config = load_config()
             assert isinstance(config, configparser.ConfigParser)
 
@@ -50,7 +58,9 @@ def test_save_and_load_config():
 def test_get_token_returns_none_when_missing():
     """get_token should return None if no token saved."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("freefood.config.get_config_path", return_value=Path(tmpdir) / "config.ini"):
+        with patch(
+            "freefood.config.get_config_path", return_value=Path(tmpdir) / "config.ini"
+        ):
             assert get_token() is None
 
 

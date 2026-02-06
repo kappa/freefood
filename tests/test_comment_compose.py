@@ -2,7 +2,7 @@
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import TextArea, Button
+from textual.widgets import Button, TextArea
 
 from freefood.widgets.comment_compose import CommentCompose
 from freefood.widgets.post import PostBlock
@@ -32,6 +32,7 @@ class TestCommentComposeUI:
 
     async def test_shows_textarea(self, post_id):
         """CommentCompose shows a TextArea for writing."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield CommentCompose(post_id=post_id)
@@ -42,6 +43,7 @@ class TestCommentComposeUI:
 
     async def test_shows_cancel_button(self, post_id):
         """CommentCompose shows a Cancel button."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield CommentCompose(post_id=post_id)
@@ -52,6 +54,7 @@ class TestCommentComposeUI:
 
     async def test_shows_submit_button(self, post_id):
         """CommentCompose shows a Submit button."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield CommentCompose(post_id=post_id)
@@ -167,6 +170,7 @@ class TestCommentComposeIntegration:
 
     async def test_comment_button_shows_compose(self, sample_post):
         """Clicking Comment button shows CommentCompose widget."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(sample_post)
@@ -186,6 +190,7 @@ class TestCommentComposeIntegration:
 
     async def test_cancel_hides_compose(self, sample_post):
         """Cancelling hides CommentCompose widget."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(sample_post)
@@ -209,6 +214,7 @@ class TestCommentComposeIntegration:
 
     async def test_submit_hides_compose_and_adds_comment(self, sample_post):
         """Submitting comment hides compose and adds comment to post."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(sample_post)
@@ -218,10 +224,13 @@ class TestCommentComposeIntegration:
                 for block in self.query(PostBlock):
                     if block.post.id == message.post_id:
                         from freefood.models import Comment, User
+
                         new_comment = Comment(
                             id="new-comment",
                             body=message.body,
-                            author=User(id="u1", username="me", screen_name="Me", type="user"),
+                            author=User(
+                                id="u1", username="me", screen_name="Me", type="user"
+                            ),
                             created_at="1700000000000",
                             likes=0,
                         )

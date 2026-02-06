@@ -1,7 +1,8 @@
 """Tests for FreeFeed API client."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from freefood.api import FreeFeedAPI
 from freefood.models import User
@@ -93,7 +94,12 @@ async def test_denormalize_posts():
             }
         ],
         "users": [
-            {"id": "user-1", "username": "alice", "screenName": "Alice", "type": "user"},
+            {
+                "id": "user-1",
+                "username": "alice",
+                "screenName": "Alice",
+                "type": "user",
+            },
             {"id": "user-2", "username": "bob", "screenName": "Bob", "type": "user"},
             {"id": "feed-1", "username": "news", "screenName": "News", "type": "group"},
         ],
@@ -140,7 +146,12 @@ async def test_denormalize_posts_sets_direct_recipients():
             }
         ],
         "users": [
-            {"id": "user-1", "username": "alice", "screenName": "Alice", "type": "user"},
+            {
+                "id": "user-1",
+                "username": "alice",
+                "screenName": "Alice",
+                "type": "user",
+            },
             {"id": "user-2", "username": "bob", "screenName": "Bob", "type": "user"},
         ],
         "subscriptions": [
@@ -379,7 +390,12 @@ async def test_search():
         ],
         "comments": [],
         "users": [
-            {"id": "u1", "username": "charlie", "screenName": "Charlie", "type": "user"},
+            {
+                "id": "u1",
+                "username": "charlie",
+                "screenName": "Charlie",
+                "type": "user",
+            },
         ],
     }
 

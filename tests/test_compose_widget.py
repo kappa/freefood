@@ -28,8 +28,9 @@ class TestComposeBlockCollapsedState:
     @pytest.mark.asyncio
     async def test_collapsed_shows_placeholder(self):
         """Collapsed state should show a placeholder input."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Input
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -37,7 +38,6 @@ class TestComposeBlockCollapsedState:
 
         async with TestApp().run_test() as pilot:
             app = pilot.app
-            compose = app.query_one(ComposeBlock)
 
             # Should show a placeholder input
             placeholder = app.query_one("#compose-placeholder", Input)
@@ -97,8 +97,9 @@ class TestComposeBlockCollapsedState:
     @pytest.mark.asyncio
     async def test_textarea_focused_after_expansion(self):
         """TextArea should be focused after expansion."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import TextArea
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -106,7 +107,6 @@ class TestComposeBlockCollapsedState:
 
         async with TestApp().run_test() as pilot:
             app = pilot.app
-            compose = app.query_one(ComposeBlock)
 
             # Focus placeholder and press Enter to expand
             placeholder = app.query_one("#compose-placeholder")
@@ -125,8 +125,9 @@ class TestComposeBlockExpandedState:
     @pytest.mark.asyncio
     async def test_expanded_shows_textarea(self):
         """Expanded state should show a TextArea for the body."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import TextArea
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -148,8 +149,9 @@ class TestComposeBlockExpandedState:
     @pytest.mark.asyncio
     async def test_expanded_shows_post_to_field(self):
         """Expanded state should show a 'Post to' input field."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Input
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -172,8 +174,9 @@ class TestComposeBlockExpandedState:
     @pytest.mark.asyncio
     async def test_expanded_shows_cancel_button(self):
         """Expanded state should show a Cancel button."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Button
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -196,8 +199,9 @@ class TestComposeBlockExpandedState:
     @pytest.mark.asyncio
     async def test_expanded_shows_post_button(self):
         """Expanded state should show a Post button."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Button
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -224,8 +228,9 @@ class TestComposeBlockCancelAction:
     @pytest.mark.asyncio
     async def test_cancel_collapses_widget(self):
         """Clicking Cancel should collapse the widget."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Button
+
+        from freefood.widgets.compose import ComposeBlock
 
         class TestApp(App):
             def compose(self):
@@ -262,8 +267,9 @@ class TestComposeBlockPostAction:
     @pytest.mark.asyncio
     async def test_post_button_emits_message_with_body(self):
         """Clicking Post should emit PostRequested with body and feeds."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Button, TextArea
+
+        from freefood.widgets.compose import ComposeBlock
 
         messages_received = []
 
@@ -299,8 +305,9 @@ class TestComposeBlockPostAction:
     @pytest.mark.asyncio
     async def test_post_button_includes_feeds(self):
         """PostRequested should include feeds from the 'Post to' field."""
+        from textual.widgets import Button, Input, TextArea
+
         from freefood.widgets.compose import ComposeBlock
-        from textual.widgets import Button, TextArea, Input
 
         messages_received = []
 
@@ -339,8 +346,9 @@ class TestComposeBlockPostAction:
     @pytest.mark.asyncio
     async def test_empty_body_does_not_post(self):
         """Empty body should not emit PostRequested."""
-        from freefood.widgets.compose import ComposeBlock
         from textual.widgets import Button
+
+        from freefood.widgets.compose import ComposeBlock
 
         messages_received = []
 
@@ -405,8 +413,9 @@ class TestComposeBlockReset:
     @pytest.mark.asyncio
     async def test_reset_collapses_and_clears(self):
         """reset() should collapse and clear the widget."""
+        from textual.widgets import Input, TextArea
+
         from freefood.widgets.compose import ComposeBlock
-        from textual.widgets import TextArea, Input
 
         class TestApp(App):
             def compose(self):

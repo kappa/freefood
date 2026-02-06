@@ -131,7 +131,11 @@ class ComposeBlock(Widget, can_focus=True):
             # Get the feeds
             post_to = self.query_one("#compose-post-to", Input)
             feeds_str = post_to.value.strip()
-            feeds = [f.strip() for f in feeds_str.split(",") if f.strip()] if feeds_str else []
+            feeds = (
+                [f.strip() for f in feeds_str.split(",") if f.strip()]
+                if feeds_str
+                else []
+            )
             # Emit the message
             self.post_message(self.PostRequested(body, feeds))
 

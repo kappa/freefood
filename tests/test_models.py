@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from freefood.models import User, Comment, Post, View, HistoryEntry
+from freefood.models import Comment, HistoryEntry, Post, User, View
 
 
 def test_user_creation():

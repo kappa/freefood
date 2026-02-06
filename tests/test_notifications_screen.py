@@ -35,7 +35,9 @@ class FakeAPI:
         self.notifications = notifications
         self.calls: int = 0
 
-    async def get_notifications(self, offset: int = 0, limit: int = 30) -> list[Notification]:
+    async def get_notifications(
+        self, offset: int = 0, limit: int = 30
+    ) -> list[Notification]:
         self.calls += 1
         return self.notifications
 
@@ -154,6 +156,7 @@ class TestNotificationsScreen:
     async def test_post_click_opens_post_screen(self):
         """PostClicked should open PostScreen."""
         from textual.app import App
+
         from freefood.models import Post
 
         notifications = [make_notification()]

@@ -76,7 +76,11 @@ class AuthScreen(BaseScreen):
                     id="auth-instructions",
                 )
                 yield Button("Open Browser", id="open-browser", variant="primary")
-                yield Input(placeholder="Paste your token here...", id="token-input", password=True)
+                yield Input(
+                    placeholder="Paste your token here...",
+                    id="token-input",
+                    password=True,
+                )
                 yield Button("Connect", id="connect", variant="success")
 
     def on_mount(self) -> None:

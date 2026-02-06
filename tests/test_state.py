@@ -1,7 +1,7 @@
 """Tests for application state management."""
 
-from freefood.models import View, HistoryEntry
-from freefood.state import AppState, MAX_HISTORY_SIZE
+from freefood.models import View
+from freefood.state import MAX_HISTORY_SIZE, AppState
 
 
 def test_appstate_default_initialization():

@@ -9,8 +9,9 @@ from pathlib import Path
 
 import httpx
 
-from .models import Attachment
 from freefood.logging import log_info
+
+from .models import Attachment
 
 
 class AttachmentManager:
@@ -38,7 +39,9 @@ class AttachmentManager:
         """Get or create HTTP client."""
         if self._client is None:
             headers = {"Authorization": f"Bearer {self._token}"} if self._token else {}
-            self._client = httpx.AsyncClient(timeout=60.0, follow_redirects=True, headers=headers)
+            self._client = httpx.AsyncClient(
+                timeout=60.0, follow_redirects=True, headers=headers
+            )
         return self._client
 
     async def close(self) -> None:
@@ -68,28 +71,36 @@ class AttachmentManager:
 
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         client = await self._get_client()
-        
-        
+
         async with client.stream("GET", attachment.url) as response:
-            response.raise_for_status() # Re-enable proper error handling
-            
+            response.raise_for_status()  # Re-enable proper error handling
+
             with open(local_path, "wb") as f:
                 async for chunk in response.aiter_bytes():
                     f.write(chunk)
-        
+
         log_info(f"Successfully downloaded {attachment.file_name} to {local_path}")
         return local_path
 
     def open_native(self, local_path: Path) -> None:
         """Open file using platform-specific native app."""
         if sys.platform == "linux":
-            subprocess.Popen(["xdg-open", str(local_path)], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            subprocess.Popen(
+                ["xdg-open", str(local_path)],
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(local_path)], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            subprocess.Popen(
+                ["open", str(local_path)],
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
         elif sys.platform == "win32":
             os.startfile(local_path)
 
     def open_browser(self, url: str) -> None:
         """Open URL in default browser."""
         import webbrowser
+
         webbrowser.open(url)

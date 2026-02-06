@@ -2,9 +2,9 @@
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
-from textual.widgets import Static, Button
+from textual.widgets import Static
 
-from freefood.logging import get_errors, clear_errors
+from freefood.logging import clear_errors, get_errors
 from freefood.models import View
 from freefood.screens.base import BaseScreen
 from freefood.widgets.menu import MenuBar
@@ -76,10 +76,15 @@ class ErrorsScreen(BaseScreen):
 
         for err in reversed(errors):
             with Vertical(classes="error-entry"):
-                yield Static(err["timestamp"].strftime("%Y-%m-%d %H:%M:%S"), classes="error-timestamp")
+                yield Static(
+                    err["timestamp"].strftime("%Y-%m-%d %H:%M:%S"),
+                    classes="error-timestamp",
+                )
                 yield Static(err["message"], classes="error-message")
                 if err["exception"]:
-                    yield Static(f"Exception: {err['exception']}", classes="error-exception")
+                    yield Static(
+                        f"Exception: {err['exception']}", classes="error-exception"
+                    )
 
     def action_focus_menu(self) -> None:
         menu = self.query_one(MenuBar)
@@ -100,15 +105,18 @@ class ErrorsScreen(BaseScreen):
             return
 
         self.app.state.navigate_to(message.view)
-        
+
         if message.view == View.SEARCH:
             from freefood.screens.search import SearchScreen
+
             self.app.push_screen(SearchScreen(self.app.state))
         elif message.view == View.NOTIFICATIONS:
             from freefood.screens.notifications import NotificationsScreen
+
             self.app.push_screen(NotificationsScreen(self.app.state))
         else:
             from freefood.screens.feed import FeedScreen
+
             self.app.push_screen(FeedScreen(self.app.state))
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
@@ -117,18 +125,21 @@ class ErrorsScreen(BaseScreen):
         if entry:
             self.app.state.current_view = entry.view
             self.app.state.current_target = entry.target
-            
+
             if entry.view == View.SEARCH:
                 from freefood.screens.search import SearchScreen
+
                 self.app.push_screen(SearchScreen(self.app.state))
             elif entry.view == View.NOTIFICATIONS:
                 from freefood.screens.notifications import NotificationsScreen
+
                 self.app.push_screen(NotificationsScreen(self.app.state))
             elif entry.view == View.ERRORS:
                 # Should not really happen from history but handle anyway
                 self.action_refresh()
             else:
                 from freefood.screens.feed import FeedScreen
+
                 self.app.push_screen(FeedScreen(self.app.state))
         else:
             self.notify("No history")

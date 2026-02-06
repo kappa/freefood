@@ -2,10 +2,10 @@
 
 import pytest
 from textual.app import App, ComposeResult
-from textual.widgets import TextArea, Button
+from textual.widgets import Button, TextArea
 
 from freefood.models import Comment, User
-from freefood.widgets.post import PostBlock, CommentBlock
+from freefood.widgets.post import PostBlock
 from tests.test_post_widget import make_post
 
 
@@ -22,6 +22,7 @@ class TestEditPostButton:
 
     async def test_edit_button_shown_for_own_post(self, own_post):
         """Edit button is visible for own posts."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -35,6 +36,7 @@ class TestEditPostButton:
 
     async def test_edit_button_not_shown_for_other_post(self, other_post):
         """Edit button is not visible for other's posts."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(other_post)
@@ -56,6 +58,7 @@ class TestEditPostMode:
 
     async def test_edit_button_shows_textarea(self, own_post):
         """Clicking Edit shows TextArea with current body."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -72,6 +75,7 @@ class TestEditPostMode:
 
     async def test_edit_mode_shows_save_cancel_buttons(self, own_post):
         """Edit mode shows Save and Cancel buttons."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -90,6 +94,7 @@ class TestEditPostMode:
 
     async def test_cancel_exits_edit_mode(self, own_post):
         """Cancel button exits edit mode without saving."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -144,6 +149,7 @@ class TestEditPostMode:
 
     async def test_escape_cancels_edit_mode(self, own_post):
         """Escape key cancels edit mode."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -226,6 +232,7 @@ class TestEditComment:
 
     async def test_edit_button_shown_on_own_comment(self, post_with_own_comment):
         """Edit button shows on own comments."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -237,8 +244,11 @@ class TestEditComment:
             edit_btns = pilot.app.query(".comment-edit-btn")
             assert len(edit_btns) == 1
 
-    async def test_edit_button_not_shown_on_other_comment(self, post_with_other_comment):
+    async def test_edit_button_not_shown_on_other_comment(
+        self, post_with_other_comment
+    ):
         """Edit button not shown on other's comments."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_other_comment)
@@ -271,6 +281,7 @@ class TestEditCommentMode:
 
     async def test_edit_comment_shows_textarea(self, post_with_own_comment):
         """Clicking Edit on comment shows TextArea with current body."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -288,6 +299,7 @@ class TestEditCommentMode:
 
     async def test_edit_comment_shows_save_cancel_buttons(self, post_with_own_comment):
         """Edit comment mode shows Save and Cancel buttons."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -306,6 +318,7 @@ class TestEditCommentMode:
 
     async def test_cancel_comment_edit_exits_mode(self, post_with_own_comment):
         """Cancel exits comment edit mode."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -356,6 +369,7 @@ class TestEditCommentMode:
 
     async def test_escape_cancels_comment_edit(self, post_with_own_comment):
         """Escape key cancels comment edit mode."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -418,6 +432,7 @@ class TestDeletePostButton:
 
     async def test_delete_button_shown_for_own_post(self, own_post):
         """Delete button is visible for own posts."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -431,6 +446,7 @@ class TestDeletePostButton:
 
     async def test_delete_button_not_shown_for_other_post(self, other_post):
         """Delete button is not visible for other's posts."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(other_post)
@@ -444,6 +460,7 @@ class TestDeletePostButton:
 
     async def test_delete_button_shows_confirmation(self, own_post):
         """Clicking Delete shows confirmation buttons."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -462,6 +479,7 @@ class TestDeletePostButton:
 
     async def test_cancel_delete_hides_confirmation(self, own_post):
         """Cancelling delete hides confirmation."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(own_post)
@@ -541,6 +559,7 @@ class TestDeleteComment:
 
     async def test_delete_button_shown_on_own_comment(self, post_with_own_comment):
         """Delete button shows on own comments."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)
@@ -552,8 +571,11 @@ class TestDeleteComment:
             delete_btns = pilot.app.query(".comment-delete-btn")
             assert len(delete_btns) == 1
 
-    async def test_delete_button_not_shown_on_other_comment(self, post_with_other_comment):
+    async def test_delete_button_not_shown_on_other_comment(
+        self, post_with_other_comment
+    ):
         """Delete button not shown on other's comments."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_other_comment)
@@ -567,6 +589,7 @@ class TestDeleteComment:
 
     async def test_delete_comment_shows_confirmation(self, post_with_own_comment):
         """Clicking Delete on comment shows confirmation buttons."""
+
         class TestApp(App):
             def compose(self) -> ComposeResult:
                 yield PostBlock(post_with_own_comment)

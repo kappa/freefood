@@ -52,7 +52,9 @@ def highlight_text(text: str, terms: list[str]) -> str:
         return text
 
     pattern = re.compile(
-        "|".join(re.escape(term) for term in sorted(clean_terms, key=len, reverse=True)),
+        "|".join(
+            re.escape(term) for term in sorted(clean_terms, key=len, reverse=True)
+        ),
         re.IGNORECASE,
     )
 

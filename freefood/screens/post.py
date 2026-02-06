@@ -32,7 +32,10 @@ class PostScreen(Screen):
     """
 
     def __init__(
-        self, state: AppState | None = None, post: Post | None = None, post_id: str | None = None
+        self,
+        state: AppState | None = None,
+        post: Post | None = None,
+        post_id: str | None = None,
     ) -> None:
         super().__init__()
         self._state = state

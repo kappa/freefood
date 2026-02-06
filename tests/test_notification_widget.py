@@ -17,7 +17,7 @@ def make_user(username: str = "alice") -> User:
 async def test_notification_post_like_format():
     """NotificationBlock should format post_like event."""
     from textual.app import App
-    from textual.widgets import Static, Button
+    from textual.widgets import Button, Static
 
     notif = Notification(
         id="n1",
@@ -107,7 +107,7 @@ def test_notification_post_click_emits_message():
 async def test_notification_mention_comment_to_format():
     """NotificationBlock should format mention_comment_to event."""
     from textual.app import App
-    from textual.widgets import Static, Button
+    from textual.widgets import Button, Static
 
     notif = Notification(
         id="n2",

@@ -3,16 +3,16 @@
 from datetime import datetime
 from pathlib import Path
 
+from rich.markup import escape
 from textual.app import ComposeResult
 from textual.containers import Horizontal, HorizontalGroup, Vertical, VerticalGroup
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static, Button, TextArea
+from textual.widgets import Button, Static, TextArea
 
-from freefood.models import Post, Comment, Attachment
+from freefood.models import Attachment, Comment, Post
 from freefood.search import highlight_text
 from freefood.widgets.comment_compose import CommentCompose
-from rich.markup import escape
 
 
 def format_time_ago(dt: datetime) -> str:
@@ -433,7 +433,9 @@ class PostBlock(Widget, can_focus=True):
                     markup=bool(self.highlight_terms),
                 )
                 if self._body_is_truncated():
-                    btn = Button("Show more...", id="show-more-body", classes="show-more")
+                    btn = Button(
+                        "Show more...", id="show-more-body", classes="show-more"
+                    )
                     btn.can_focus = self.post_mode
                     yield btn
 
@@ -461,7 +463,9 @@ class PostBlock(Widget, can_focus=True):
                         btn_edit.can_focus = self.post_mode
                         yield btn_edit
                         if self.confirming_delete:
-                            btn_confirm = Button("Confirm Delete", id="btn-confirm-delete")
+                            btn_confirm = Button(
+                                "Confirm Delete", id="btn-confirm-delete"
+                            )
                             btn_confirm.can_focus = self.post_mode
                             yield btn_confirm
                             btn_cancel = Button("Cancel", id="btn-cancel-delete")
@@ -487,7 +491,9 @@ class PostBlock(Widget, can_focus=True):
         """Format post header."""
         author = f"@{self.post.author.username}" if self.post.author else "@unknown"
         if self.post.direct_recipients:
-            recipients = ", ".join(f"@{u.username}" for u in self.post.direct_recipients)
+            recipients = ", ".join(
+                f"@{u.username}" for u in self.post.direct_recipients
+            )
             return f"{author} -> {recipients}:"
         if self.post.groups:
             groups = ", ".join(f"@{g.username}" for g in self.post.groups)
@@ -543,7 +549,7 @@ class PostBlock(Widget, can_focus=True):
             stem_len = max_len - len(suffix) - 3
             if stem_len > 0:
                 return f"{stem[:stem_len]}...{suffix}"
-            return f"{name[:max_len-3]}..."
+            return f"{name[: max_len - 3]}..."
 
         with Horizontal(classes="post-attachments"):
             for att in self.post.attachments:
@@ -577,7 +583,12 @@ class PostBlock(Widget, can_focus=True):
         # Render comments with the 'more comments' button at the correct offset
         for i, comment in enumerate(comments):
             # Insert 'more comments' button at the offset position
-            if omitted > 0 and not self.comments_expanded and i == offset and not button_yielded:
+            if (
+                omitted > 0
+                and not self.comments_expanded
+                and i == offset
+                and not button_yielded
+            ):
                 btn = Button(
                     f"── {omitted} more comments with {omitted_likes} likes ──",
                     id="btn-more-comments",
@@ -592,9 +603,13 @@ class PostBlock(Widget, can_focus=True):
                 highlight_terms=self.highlight_terms,
             )
 
-
-        # If offset equals len(comments) and button not yet yielded, button goes at the end
-        if omitted > 0 and not self.comments_expanded and offset >= len(comments) and not button_yielded:
+        # If offset equals len(comments) and button not yet yielded, it goes at the end
+        if (
+            omitted > 0
+            and not self.comments_expanded
+            and offset >= len(comments)
+            and not button_yielded
+        ):
             btn = Button(
                 f"── {omitted} more comments with {omitted_likes} likes ──",
                 id="btn-more-comments",
@@ -664,24 +679,26 @@ class PostBlock(Widget, can_focus=True):
         elif event.button.id == "btn-confirm-delete":
             self._confirm_delete()
         elif event.button.id and event.button.id.startswith("comment-edit-"):
-            comment_id = event.button.id[len("comment-edit-"):]
+            comment_id = event.button.id[len("comment-edit-") :]
             self._start_editing_comment(comment_id)
         elif event.button.id == "btn-cancel-comment-edit":
             self._cancel_editing_comment()
         elif event.button.id == "btn-save-comment-edit":
             self._save_editing_comment()
         elif event.button.id and event.button.id.startswith("comment-delete-"):
-            comment_id = event.button.id[len("comment-delete-"):]
+            comment_id = event.button.id[len("comment-delete-") :]
             self._start_comment_delete_confirmation(comment_id)
         elif event.button.id and event.button.id.startswith("comment-confirm-delete-"):
-            comment_id = event.button.id[len("comment-confirm-delete-"):]
+            comment_id = event.button.id[len("comment-confirm-delete-") :]
             self._confirm_delete_comment(comment_id)
         elif event.button.id and event.button.id.startswith("comment-cancel-delete-"):
-            comment_id = event.button.id[len("comment-cancel-delete-"):]
+            comment_id = event.button.id[len("comment-cancel-delete-") :]
             self._cancel_comment_delete_confirmation(comment_id)
         elif event.button.id and event.button.id.startswith("att-"):
-            att_id = event.button.id[len("att-"):]
-            attachment = next((a for a in self.post.attachments if a.id == att_id), None)
+            att_id = event.button.id[len("att-") :]
+            attachment = next(
+                (a for a in self.post.attachments if a.id == att_id), None
+            )
             if attachment:
                 self.post_message(self.AttachmentOpened(attachment))
 
@@ -742,6 +759,7 @@ class PostBlock(Widget, can_focus=True):
     def _focus_comment_edit_textarea(self) -> None:
         """Focus the comment edit textarea if it exists."""
         from textual.css.query import NoMatches
+
         try:
             textarea = self.query_one("#edit-comment-body", TextArea)
             textarea.focus()
@@ -765,6 +783,7 @@ class PostBlock(Widget, can_focus=True):
     def _focus_comment_edit_button(self, comment_id: str) -> None:
         """Focus the Edit button for a specific comment."""
         from textual.css.query import NoMatches
+
         try:
             edit_btn = self.query_one(f"#comment-edit-{comment_id}", Button)
             edit_btn.focus()

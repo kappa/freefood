@@ -48,20 +48,22 @@ def log_error(message: str, exception: Exception | None = None) -> None:
     logger = get_logger()
     timestamp = datetime.now()
     full_message = f"{message}: {exception}" if exception else message
-    
+
     if exception:
         logger.error(f"{message}: {exception}", exc_info=True)
     else:
         logger.error(message)
 
     # Store in buffer for UI
-    _error_buffer.append({
-        "timestamp": timestamp,
-        "message": message,
-        "exception": str(exception) if exception else None,
-        "full_message": full_message
-    })
-    
+    _error_buffer.append(
+        {
+            "timestamp": timestamp,
+            "message": message,
+            "exception": str(exception) if exception else None,
+            "full_message": full_message,
+        }
+    )
+
     # Prune old errors
     while len(_error_buffer) > MAX_BUFFER_SIZE:
         _error_buffer.pop(0)

@@ -4,10 +4,10 @@ from datetime import datetime
 
 import pytest
 
-from freefood.models import Post, User, View, Comment
+from freefood.models import Comment, Post, User, View
 from freefood.screens.feed import FeedScreen
 from freefood.state import AppState
-from freefood.widgets.post import PostBlock, CommentBlock
+from freefood.widgets.post import CommentBlock, PostBlock
 
 
 def make_user(
@@ -82,8 +82,8 @@ class TestFeedModeNavigation:
             focused = app.focused
             assert focused is post_blocks[1], f"Expected post_blocks[1], got {focused}"
 
-            # Press Up - currently changes selection (this test verifies current broken behavior)
-            # The test should FAIL once we check that Up moves to previous post
+            # Press Up - currently changes selection
+            # (this test verifies current broken behavior)
             await pilot.press("up")
             await pilot.pause()
 
@@ -128,7 +128,9 @@ class TestFeedModeNavigation:
             await pilot.pause()
 
             # Verify second post is focused
-            assert app.focused is post_blocks[1], f"Expected post_blocks[1], got {app.focused}"
+            assert app.focused is post_blocks[1], (
+                f"Expected post_blocks[1], got {app.focused}"
+            )
 
             # Press Down - should NOT change selection (should scroll instead)
             await pilot.press("down")
@@ -172,14 +174,18 @@ class TestFeedModeNavigation:
             app.set_focus(post_blocks[0])
             await pilot.pause()
 
-            assert app.focused is post_blocks[0], f"Setup: expected post_blocks[0], got {app.focused}"
+            assert app.focused is post_blocks[0], (
+                f"Setup: expected post_blocks[0], got {app.focused}"
+            )
 
             # Press Tab - should move to next post
             await pilot.press("tab")
             await pilot.pause()
 
             # Selection should be on second post
-            assert app.focused is post_blocks[1], f"Tab should move to next post, got {app.focused}"
+            assert app.focused is post_blocks[1], (
+                f"Tab should move to next post, got {app.focused}"
+            )
 
     @pytest.mark.asyncio
     async def test_shift_tab_changes_selection_to_previous_post(self):
@@ -213,14 +219,18 @@ class TestFeedModeNavigation:
             app.set_focus(post_blocks[1])
             await pilot.pause()
 
-            assert app.focused is post_blocks[1], f"Setup: expected post_blocks[1], got {app.focused}"
+            assert app.focused is post_blocks[1], (
+                f"Setup: expected post_blocks[1], got {app.focused}"
+            )
 
             # Press Shift+Tab - should move to previous post
             await pilot.press("shift+tab")
             await pilot.pause()
 
             # Selection should be on first post
-            assert app.focused is post_blocks[0], f"Shift+Tab should move to previous post, got {app.focused}"
+            assert app.focused is post_blocks[0], (
+                f"Shift+Tab should move to previous post, got {app.focused}"
+            )
 
 
 class TestAutoSelectionOnScroll:
@@ -228,7 +238,7 @@ class TestAutoSelectionOnScroll:
 
     @pytest.mark.asyncio
     async def test_selection_moves_when_focused_post_scrolls_out_of_view(self):
-        """When focused post scrolls completely out of view, selection moves to visible post."""
+        """When focused post scrolls out of view, selection moves to visible post."""
         from textual.app import App
 
         # Create posts with enough content to scroll
@@ -280,7 +290,9 @@ class TestAutoSelectionOnScroll:
                 "which is now out of view"
             )
             # And the focused widget should be a PostBlock
-            assert isinstance(focused, PostBlock), f"Focus should be on a PostBlock, got {type(focused)}"
+            assert isinstance(focused, PostBlock), (
+                f"Focus should be on a PostBlock, got {type(focused)}"
+            )
 
 
 class TestUserFeedNavigation:
@@ -443,7 +455,9 @@ class TestUserFeedHeader:
         from textual.app import App
         from textual.widgets import Static
 
-        group = make_user(id="g1", username="news", screen_name="News Group", user_type="group")
+        group = make_user(
+            id="g1", username="news", screen_name="News Group", user_type="group"
+        )
         post = make_post(id="p1", body="Group post")
         post.groups = [group]
         posts = [post]
@@ -456,7 +470,9 @@ class TestUserFeedHeader:
             def __init__(self):
                 super().__init__()
                 self.api = FakeAPI()
-                self.state = AppState(current_view=View.GROUP_FEED, current_target="news")
+                self.state = AppState(
+                    current_view=View.GROUP_FEED, current_target="news"
+                )
 
             def compose(self):
                 yield FeedScreen(self.state)
@@ -564,6 +580,7 @@ class TestUserFeedHeader:
 
             button = screen.query_one("#btn-subscribe", Button)
             assert button.region.height == 1
+
     @pytest.mark.asyncio
     async def test_subscribe_button_toggles(self):
         """Subscribe button should toggle label and call API."""
@@ -862,6 +879,7 @@ class TestFeedScreenMenuNavigation:
     async def test_notifications_menu_opens_notifications_screen(self):
         """Selecting Notifications should open NotificationsScreen."""
         from textual.app import App
+
         from freefood.widgets.menu import MenuBar
 
         class FakeAPI:
@@ -932,6 +950,7 @@ class TestComposeBlockIntegration:
     async def test_compose_block_shown_in_home_view(self):
         """ComposeBlock should appear in Home view."""
         from textual.app import App
+
         from freefood.widgets.compose import ComposeBlock
 
         class FakeAPI:
@@ -963,6 +982,7 @@ class TestComposeBlockIntegration:
     async def test_compose_block_shown_in_directs_view(self):
         """ComposeBlock should appear in Directs view."""
         from textual.app import App
+
         from freefood.widgets.compose import ComposeBlock
 
         class FakeAPI:
@@ -988,12 +1008,15 @@ class TestComposeBlockIntegration:
             await pilot.pause()
             screen = pilot.app.screen
             compose_blocks = list(screen.query(ComposeBlock))
-            assert len(compose_blocks) == 1, "ComposeBlock should appear in DIRECTS view"
+            assert len(compose_blocks) == 1, (
+                "ComposeBlock should appear in DIRECTS view"
+            )
 
     @pytest.mark.asyncio
     async def test_compose_block_not_shown_in_user_feed_view(self):
         """ComposeBlock should NOT appear in User feed view."""
         from textual.app import App
+
         from freefood.widgets.compose import ComposeBlock
 
         class FakeAPI:
@@ -1022,12 +1045,15 @@ class TestComposeBlockIntegration:
             await pilot.pause()
             screen = pilot.app.screen
             compose_blocks = list(screen.query(ComposeBlock))
-            assert len(compose_blocks) == 0, "ComposeBlock should NOT appear in USER_FEED view"
+            assert len(compose_blocks) == 0, (
+                "ComposeBlock should NOT appear in USER_FEED view"
+            )
 
     @pytest.mark.asyncio
     async def test_compose_block_not_shown_in_group_feed_view(self):
         """ComposeBlock should NOT appear in Group feed view."""
         from textual.app import App
+
         from freefood.widgets.compose import ComposeBlock
 
         class FakeAPI:
@@ -1044,7 +1070,9 @@ class TestComposeBlockIntegration:
             def __init__(self):
                 super().__init__()
                 self.api = FakeAPI()
-                self.state = AppState(current_view=View.GROUP_FEED, current_target="news")
+                self.state = AppState(
+                    current_view=View.GROUP_FEED, current_target="news"
+                )
 
             def on_mount(self) -> None:
                 self.push_screen(FeedScreen(self.state))
@@ -1053,4 +1081,6 @@ class TestComposeBlockIntegration:
             await pilot.pause()
             screen = pilot.app.screen
             compose_blocks = list(screen.query(ComposeBlock))
-            assert len(compose_blocks) == 0, "ComposeBlock should NOT appear in GROUP_FEED view"
+            assert len(compose_blocks) == 0, (
+                "ComposeBlock should NOT appear in GROUP_FEED view"
+            )

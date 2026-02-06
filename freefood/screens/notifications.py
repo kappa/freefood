@@ -4,12 +4,11 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
-from freefood.models import Notification, View
+from freefood.models import Notification, Post, View
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.notification import NotificationBlock
-from freefood.models import Post
 
 
 class NotificationsScreen(BaseScreen):
@@ -85,7 +84,9 @@ class NotificationsScreen(BaseScreen):
 
             if not self.notifications:
                 container.mount(
-                    Static("No notifications", id="notifications-empty", classes="loading")
+                    Static(
+                        "No notifications", id="notifications-empty", classes="loading"
+                    )
                 )
                 return
 

@@ -2,8 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from freefood.models import View, HistoryEntry
-
+from freefood.models import HistoryEntry, View
 
 MAX_HISTORY_SIZE = 50
 
@@ -40,7 +39,9 @@ class AppState:
         """Check if back navigation is possible."""
         return len(self.history) > 0
 
-    def navigate_to(self, view: View, target: str | None = None, scroll_position: int = 0) -> None:
+    def navigate_to(
+        self, view: View, target: str | None = None, scroll_position: int = 0
+    ) -> None:
         """Navigate to a new view, pushing current to history."""
         self.push_history(scroll_position)
         self.current_view = view

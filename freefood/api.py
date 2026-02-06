@@ -4,7 +4,9 @@ from datetime import datetime
 
 import httpx
 from httpx import URL
-from .models import Attachment, Comment, Post, User, Notification
+
+from .models import Attachment, Comment, Notification, Post, User
+
 
 class FreeFeedAPI:
     """Async client for FreeFeed API."""
@@ -77,17 +79,19 @@ class FreeFeedAPI:
 
         if not att_id:
             return None
-        
+
         # Priority 1: Check if 'url' is directly provided (as per design spec)
         if attachment_data.get("url"):
             # Ensure base_url is also joined with the raw URL if it's relative
             return str(URL(self.base_url).join(attachment_data["url"]))
 
-        # Priority 2: Use the /v4/attachments/{id}/original?redirect= pattern for direct download
+        # Priority 2: Use /v4/attachments/{id}/original?redirect= for direct download
         # Use httpx.URL for robust path joining
         base_url_obj = URL(self.base_url)
         constructed_path = f"/v4/attachments/{att_id}/original"
-        final_url_obj = base_url_obj.join(constructed_path).copy_with(params={"redirect": ""})
+        final_url_obj = base_url_obj.join(constructed_path).copy_with(
+            params={"redirect": ""}
+        )
 
         constructed_url = str(final_url_obj)
         return constructed_url
@@ -107,7 +111,7 @@ class FreeFeedAPI:
             c["id"]: self._parse_comment(c, users_by_id)
             for c in data.get("comments", [])
         }
-        attachments_by_id = {} # Initialize the dictionary
+        attachments_by_id = {}  # Initialize the dictionary
         for a in data.get("attachments", []):
             attachment_url = self._get_attachment_url(a)
             if not attachment_url:
@@ -221,7 +225,12 @@ class FreeFeedAPI:
 
         user_data = data.get("users")
         if isinstance(user_data, dict):
-            for key in ("youAreSubscribed", "youSubscribed", "isSubscribed", "subscribed"):
+            for key in (
+                "youAreSubscribed",
+                "youSubscribed",
+                "isSubscribed",
+                "subscribed",
+            ):
                 if key in user_data:
                     return bool(user_data[key])
             you_can = user_data.get("youCan")
@@ -258,7 +267,9 @@ class FreeFeedAPI:
             if "date" in item and item["date"]:
                 created_at = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
             else:
-                created_at = datetime.fromtimestamp(int(item.get("createdAt", "0")) / 1000)
+                created_at = datetime.fromtimestamp(
+                    int(item.get("createdAt", "0")) / 1000
+                )
             notifications.append(
                 Notification(
                     id=item.get("id", ""),
@@ -270,7 +281,8 @@ class FreeFeedAPI:
                         "postId", item.get("post_id", item.get("target_post_id"))
                     ),
                     comment_id=item.get(
-                        "commentId", item.get("comment_id", item.get("target_comment_id"))
+                        "commentId",
+                        item.get("comment_id", item.get("target_comment_id")),
                     ),
                 )
             )
@@ -411,17 +423,4 @@ class FreeFeedAPI:
         """Unlike a comment."""
         client = await self._get_client()
         response = await client.post(f"/v4/comments/{comment_id}/unlike")
-        response.raise_for_status()
-
-    # Subscription actions
-    async def subscribe(self, username: str) -> None:
-        """Subscribe to a user."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/users/{username}/subscribe")
-        response.raise_for_status()
-
-    async def unsubscribe(self, username: str) -> None:
-        """Unsubscribe from a user."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/users/{username}/unsubscribe")
         response.raise_for_status()

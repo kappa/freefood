@@ -1,12 +1,11 @@
 """Feed screen for displaying posts."""
 
-
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.widgets import Static, Button
+from textual.widgets import Button, Static
 
-from freefood.config import get_username, get_attachment_open_mode
-from freefood.models import View, Post
+from freefood.config import get_username
+from freefood.models import Post, View
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.comment_compose import CommentCompose
@@ -16,7 +15,7 @@ from freefood.widgets.post import PostBlock
 
 
 class FeedContainer(ScrollableContainer):
-    """ScrollableContainer that auto-moves selection when focused post scrolls out of view."""
+    """ScrollableContainer that auto-moves selection when focused post scrolls out."""
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         """When scroll position changes, check if focused post is still visible."""
@@ -43,13 +42,9 @@ class FeedContainer(ScrollableContainer):
         """Check if a widget is visible within this container's viewport."""
         # Get the widget's region relative to the container
         widget_region = widget.region
-        # Get the container's visible region (accounting for scroll)
-        container_region = self.content_region
 
         # Check if the widget's region intersects with the visible viewport
         # The widget needs to be at least partially visible
-        # widget_region is relative to screen, container_region is the visible area
-        scroll_y = int(self.scroll_y)
         container_top = self.region.y
         container_bottom = container_top + self.region.height
 
@@ -272,9 +267,6 @@ class FeedScreen(BaseScreen):
             current = current.parent
         return None
 
-
-
-
     def action_refresh(self) -> None:
         """Refresh feed."""
         self.run_worker(self.refresh_content())
@@ -346,7 +338,8 @@ class FeedScreen(BaseScreen):
                         if message.post.omitted_comments > 0:
                             focus_index = message.post.omitted_comments_offset
                         self.app.set_timer(
-                            0.05, lambda: block.focus_comment_at(focus_index)
+                            0.05,
+                            lambda b=block, f=focus_index: b.focus_comment_at(f),
                         )
                         break
         except Exception as e:
@@ -417,9 +410,7 @@ class FeedScreen(BaseScreen):
         except Exception as e:
             self.show_error("Subscribe/unsubscribe failed", e)
 
-    async def on_post_block_user_clicked(
-        self, message: PostBlock.UserClicked
-    ) -> None:
+    async def on_post_block_user_clicked(self, message: PostBlock.UserClicked) -> None:
         """Handle navigation to a user or group feed."""
         view = View.GROUP_FEED if message.user_type == "group" else View.USER_FEED
         self.state.navigate_to(view, target=message.username)
@@ -543,7 +534,7 @@ class FeedScreen(BaseScreen):
                         if next_focus_idx >= 0 and block.post.comments:
                             block.set_timer(
                                 0.05,
-                                lambda: block.focus_comment_at(next_focus_idx),
+                                lambda b=block, n=next_focus_idx: b.focus_comment_at(n),
                             )
                         else:
                             block.focus()
