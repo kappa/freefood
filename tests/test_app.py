@@ -32,9 +32,7 @@ class TestAppMount:
     @pytest.mark.asyncio
     async def test_mount_with_token_calls_try_connect(self):
         """When a token is stored, on_mount calls _try_connect."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -87,9 +85,7 @@ class TestAuthTokenSubmitted:
     @pytest.mark.asyncio
     async def test_token_submitted_calls_try_connect(self):
         """Token submission pops screen and tries to connect."""
-        mock_user = User(
-            id="u1", username="bob", screen_name="Bob", type="user"
-        )
+        mock_user = User(id="u1", username="bob", screen_name="Bob", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -119,9 +115,7 @@ class TestAppUnmount:
     @pytest.mark.asyncio
     async def test_unmount_with_api_closes_it(self):
         """on_unmount closes both API and attachments."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -157,9 +151,7 @@ class TestAttachmentOpened:
     @pytest.mark.asyncio
     async def test_attachment_opened_browser_mode(self):
         """Browser mode opens URL in browser."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -177,26 +169,18 @@ class TestAttachmentOpened:
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
-            patch(
-                "freefood.config.get_attachment_open_mode", return_value="browser"
-            ),
+            patch("freefood.config.get_attachment_open_mode", return_value="browser"),
         ):
             async with FreeFoodApp().run_test() as pilot:
-                with patch.object(
-                    pilot.app.attachments, "open_browser"
-                ) as mock_open:
+                with patch.object(pilot.app.attachments, "open_browser") as mock_open:
                     msg = PostBlock.AttachmentOpened(attachment)
                     await pilot.app.on_post_block_attachment_opened(msg)
-                    mock_open.assert_called_once_with(
-                        "https://example.com/photo.jpg"
-                    )
+                    mock_open.assert_called_once_with("https://example.com/photo.jpg")
 
     @pytest.mark.asyncio
     async def test_attachment_opened_native_mode_success(self):
         """Native mode downloads and opens file."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -218,9 +202,7 @@ class TestAttachmentOpened:
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
-            patch(
-                "freefood.config.get_attachment_open_mode", return_value="native"
-            ),
+            patch("freefood.config.get_attachment_open_mode", return_value="native"),
         ):
             async with FreeFoodApp().run_test() as pilot:
                 with (
@@ -230,9 +212,7 @@ class TestAttachmentOpened:
                         new_callable=AsyncMock,
                         return_value=fake_path,
                     ) as mock_dl,
-                    patch.object(
-                        pilot.app.attachments, "open_native"
-                    ) as mock_open,
+                    patch.object(pilot.app.attachments, "open_native") as mock_open,
                 ):
                     msg = PostBlock.AttachmentOpened(attachment)
                     await pilot.app.on_post_block_attachment_opened(msg)
@@ -242,9 +222,7 @@ class TestAttachmentOpened:
     @pytest.mark.asyncio
     async def test_attachment_opened_native_mode_download_error(self):
         """Native mode handles download failure gracefully."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()
@@ -262,9 +240,7 @@ class TestAttachmentOpened:
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
-            patch(
-                "freefood.config.get_attachment_open_mode", return_value="native"
-            ),
+            patch("freefood.config.get_attachment_open_mode", return_value="native"),
             patch("freefood.app.log_error") as mock_log,
         ):
             async with FreeFoodApp().run_test() as pilot:
@@ -286,9 +262,7 @@ class TestMenuBarViewSelected:
     @pytest.mark.asyncio
     async def test_errors_view_selected(self):
         """Selecting ERRORS view navigates to ErrorsScreen."""
-        mock_user = User(
-            id="u1", username="alice", screen_name="Alice", type="user"
-        )
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
         mock_api = AsyncMock()
         mock_api.validate_token = AsyncMock(return_value=mock_user)
         mock_api.close = AsyncMock()

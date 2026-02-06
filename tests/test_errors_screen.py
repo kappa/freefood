@@ -188,16 +188,12 @@ class TestErrorsScreenMenuNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
-            screen.on_menu_bar_view_selected(
-                MenuBar.ViewSelected(View.NOTIFICATIONS)
-            )
+            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.NOTIFICATIONS))
             await pilot.pause()
 
             from freefood.screens.notifications import NotificationsScreen
 
-            assert any(
-                isinstance(s, NotificationsScreen) for s in app.pushed_screens
-            )
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
 
 
 class TestErrorsScreenBackNavigation:
@@ -277,9 +273,7 @@ class TestErrorsScreenBackNavigation:
         clear_errors()
         state = AppState()
         state.history.append(
-            HistoryEntry(
-                view=View.NOTIFICATIONS, target=None, scroll_position=0
-            )
+            HistoryEntry(view=View.NOTIFICATIONS, target=None, scroll_position=0)
         )
         app = MockApp(state=state)
         async with app.run_test() as pilot:
@@ -294,9 +288,7 @@ class TestErrorsScreenBackNavigation:
 
             from freefood.screens.notifications import NotificationsScreen
 
-            assert any(
-                isinstance(s, NotificationsScreen) for s in app.pushed_screens
-            )
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
             assert state.current_view == View.NOTIFICATIONS
 
     @pytest.mark.asyncio

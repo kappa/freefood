@@ -219,9 +219,7 @@ class TestAttachmentManager:
 
     def test_open_native_darwin(self, manager):
         """open_native uses 'open' on macOS."""
-        with patch("sys.platform", "darwin"), patch(
-            "subprocess.Popen"
-        ) as mock_popen:
+        with patch("sys.platform", "darwin"), patch("subprocess.Popen") as mock_popen:
             manager.open_native(Path("/tmp/test.jpg"))
             mock_popen.assert_called_once_with(
                 ["open", "/tmp/test.jpg"],
@@ -231,9 +229,10 @@ class TestAttachmentManager:
 
     def test_open_native_win32(self, manager):
         """open_native uses os.startfile on Windows."""
-        with patch("sys.platform", "win32"), patch(
-            "os.startfile", create=True
-        ) as mock_startfile:
+        with (
+            patch("sys.platform", "win32"),
+            patch("os.startfile", create=True) as mock_startfile,
+        ):
             manager.open_native(Path("C:\\tmp\\test.jpg"))
             mock_startfile.assert_called_once_with(Path("C:\\tmp\\test.jpg"))
 
