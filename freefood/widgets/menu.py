@@ -157,7 +157,7 @@ class MenuBar(Widget):
         """Focus previous button."""
         buttons = list(self.query(Button))
         focused = self.app.focused
-        if focused in buttons:
+        if isinstance(focused, Button) and focused in buttons:
             idx = buttons.index(focused)
             if idx > 0:
                 buttons[idx - 1].focus()
@@ -166,7 +166,7 @@ class MenuBar(Widget):
         """Focus next button."""
         buttons = list(self.query(Button))
         focused = self.app.focused
-        if focused in buttons:
+        if isinstance(focused, Button) and focused in buttons:
             idx = buttons.index(focused)
             if idx < len(buttons) - 1:
                 buttons[idx + 1].focus()

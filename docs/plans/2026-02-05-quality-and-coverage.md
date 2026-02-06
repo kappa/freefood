@@ -74,5 +74,6 @@ These are behavior-preserving refactors to be done *after* the quality safety ne
 - **`freefood/api.py`:** Refactor repetitive `get_`/`post_`/`put_` methods into a unified `_request()` wrapper handling auth headers, error catching, and logging.
 - **`freefood/api.py` — `_denormalize_posts`:** Break down the complex denormalization logic into smaller, individually testable functions. Add specific tests for missing references and type mismatches.
 - **`freefood/widgets/post.py`:** Extract header rendering, body formatting, and action bars from the 928-line `PostBlock` class into smaller, testable helper methods or components.
+- **Break circular import between `app.py` and screens:** Currently `FreeFoodApp` imports screens and screens need `FreeFoodApp` for typing `self.app`. Restructure so screens can honestly import and type their app reference, eliminating the mypy `attr-defined` and `no-any-return` suppressions on screen modules.
 
 These refactors are listed here so they aren't lost. The quality infrastructure built in Phases 1–6 is specifically what makes them safe to attempt.
