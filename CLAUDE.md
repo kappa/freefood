@@ -24,6 +24,24 @@ This is a venv project. Use the venv Python/pytest:
 /home/kappa/work/frf/freefood/.venv/bin/pytest tests/test_post_widget.py::TestPostModeNavigation::test_tab_stays_within_post -v
 ```
 
+## Quality Gate
+
+Before committing, all checks must pass with zero errors:
+
+```bash
+# Lint and format
+/home/kappa/work/frf/freefood/.venv/bin/ruff check freefood/ tests/
+/home/kappa/work/frf/freefood/.venv/bin/ruff format --check freefood/ tests/
+
+# Type check
+/home/kappa/work/frf/freefood/.venv/bin/mypy freefood/
+
+# Tests with coverage (must not drop below threshold in pyproject.toml)
+/home/kappa/work/frf/freefood/.venv/bin/pytest tests/
+```
+
+New code must include tests. Coverage must not regress.
+
 ## Running the App
 
 ```bash
