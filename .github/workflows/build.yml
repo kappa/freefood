@@ -13,13 +13,16 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: freefood
-            asset_name: freefood-linux
-          - os: macos-latest
+            asset_name: freefood-linux-x86_64
+          - os: macos-13
             artifact_name: freefood
-            asset_name: freefood-macos
+            asset_name: freefood-macos-x86_64
+          - os: macos-14
+            artifact_name: freefood
+            asset_name: freefood-macos-arm64
           - os: windows-latest
             artifact_name: freefood.exe
-            asset_name: freefood-windows.exe
+            asset_name: freefood-windows-x86_64.exe
 
     runs-on: ${{ matrix.os }}
 
