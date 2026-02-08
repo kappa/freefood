@@ -418,6 +418,25 @@ class TestEditCommentMode:
             assert len(messages) == 1
             assert messages[0].new_body == "Saved with shortcut"
 
+    async def test_edit_comment_textarea_has_constrained_height(
+        self, post_with_own_comment
+    ):
+        """Edit comment textarea should be constrained to 3 lines."""
+
+        class TestApp(App):
+            def compose(self) -> ComposeResult:
+                yield PostBlock(post_with_own_comment)
+
+        async with TestApp().run_test() as pilot:
+            post_block = pilot.app.query_one(PostBlock)
+            post_block.focus()
+            await pilot.press("enter")
+            edit_btn = pilot.app.query_one(".comment-edit-btn", Button)
+            await pilot.click(edit_btn)
+            await pilot.pause()
+            textarea = pilot.app.query_one("#edit-comment-body", TextArea)
+            assert textarea.region.height == 3
+
 
 class TestDeletePostButton:
     """Tests for Delete button on posts."""

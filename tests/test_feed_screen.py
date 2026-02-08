@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from textual.app import App
-from textual.widgets import Button, Static
+from textual.widgets import Button, Collapsible, Static
 
 from freefood.models import Comment, HistoryEntry, Post, User, View
 from freefood.screens.feed import FeedContainer, FeedScreen
@@ -47,6 +47,7 @@ def make_post(
     id: str = "p1",
     body: str = "Test post body",
     author: User | None = None,
+    comments: list[Comment] | None = None,
 ) -> Post:
     """Create a test post."""
     now = datetime.now()
@@ -57,7 +58,7 @@ def make_post(
         groups=[],
         created_at=now,
         updated_at=now,
-        comments=[],
+        comments=comments or [],
         omitted_comments=0,
         omitted_comments_offset=0,
         omitted_comment_likes=0,
@@ -1152,6 +1153,9 @@ def _make_mock_api(**overrides):
     api.unlike_post = AsyncMock()
     api.hide_post = AsyncMock()
     api.unhide_post = AsyncMock()
+    api.like_comment = AsyncMock()
+    api.unlike_comment = AsyncMock()
+    api.current_user = None
     api.subscribe = AsyncMock()
     api.unsubscribe = AsyncMock()
     api.create_post = AsyncMock()
@@ -1626,6 +1630,330 @@ class TestLikeUnlike:
             await pilot.pause()
             banner = screen.query_one("#error-banner", Static)
             assert "visible" in banner.classes
+
+    @pytest.mark.asyncio
+    async def test_like_post_adds_current_user_to_likes(self):
+        """Liking should prepend current user to post.likes."""
+        current_user = make_user(id="me", username="me")
+        post = make_post(id="p1")
+        post.is_liked = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        api.current_user = current_user
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            assert current_user in post.likes
+            assert post.likes[0] == current_user
+
+    @pytest.mark.asyncio
+    async def test_unlike_post_removes_current_user_from_likes(self):
+        """Unliking should remove current user from post.likes by id."""
+        current_user = make_user(id="me", username="me")
+        other_user = make_user(id="u2", username="other")
+        post = make_post(id="p1")
+        post.is_liked = True
+        post.likes = [current_user, other_user]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        api.current_user = current_user
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            assert current_user not in post.likes
+            assert other_user in post.likes
+
+    @pytest.mark.asyncio
+    async def test_like_post_no_current_user_still_works(self):
+        """Liking should still toggle state when api.current_user is None."""
+        post = make_post(id="p1")
+        post.is_liked = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        api.current_user = None
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            assert post.is_liked is True
+            assert post.likes == []
+
+    @pytest.mark.asyncio
+    async def test_unlike_post_user_not_in_list(self):
+        """Unliking should preserve existing likes if current user is absent."""
+        current_user = make_user(id="me", username="me")
+        other_user = make_user(id="u2", username="other")
+        post = make_post(id="p1")
+        post.is_liked = True
+        post.likes = [other_user]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        api.current_user = current_user
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_like_requested(PostBlock.LikeRequested(post))
+            await pilot.pause()
+            assert other_user in post.likes
+
+
+class TestCommentLikeUnlike:
+    """Test comment like/unlike handling."""
+
+    @pytest.mark.asyncio
+    async def test_like_comment(self):
+        """Liking a comment should call API and increment likes."""
+        comment = make_comment(id="c1")
+        comment.is_liked = False
+        comment.likes = 0
+        post = make_post(id="p1", comments=[comment])
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_comment_like_requested(
+                PostBlock.CommentLikeRequested(comment)
+            )
+            await pilot.pause()
+            api.like_comment.assert_called_once_with("c1")
+            assert comment.is_liked is True
+            assert comment.likes == 1
+
+    @pytest.mark.asyncio
+    async def test_unlike_comment(self):
+        """Unliking a comment should call API and decrement likes."""
+        comment = make_comment(id="c1")
+        comment.is_liked = True
+        comment.likes = 5
+        post = make_post(id="p1", comments=[comment])
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_comment_like_requested(
+                PostBlock.CommentLikeRequested(comment)
+            )
+            await pilot.pause()
+            api.unlike_comment.assert_called_once_with("c1")
+            assert comment.is_liked is False
+            assert comment.likes == 4
+
+    @pytest.mark.asyncio
+    async def test_like_comment_error_shows_banner(self):
+        """Comment like failure should show error banner."""
+        comment = make_comment(id="c1")
+        comment.is_liked = False
+        post = make_post(id="p1", comments=[comment])
+        api = _make_mock_api(
+            get_home_feed=AsyncMock(return_value=[post]),
+            like_comment=AsyncMock(side_effect=Exception("Like failed")),
+        )
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_comment_like_requested(
+                PostBlock.CommentLikeRequested(comment)
+            )
+            await pilot.pause()
+            banner = screen.query_one("#error-banner", Static)
+            assert "visible" in banner.classes
+
+    @pytest.mark.asyncio
+    async def test_unlike_comment_does_not_go_below_zero(self):
+        """Comment likes should not go below zero when unliking."""
+        comment = make_comment(id="c1")
+        comment.is_liked = True
+        comment.likes = 0
+        post = make_post(id="p1", comments=[comment])
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            await screen.on_post_block_comment_like_requested(
+                PostBlock.CommentLikeRequested(comment)
+            )
+            await pilot.pause()
+            assert comment.likes == 0
+
+    @pytest.mark.asyncio
+    async def test_comment_like_keeps_focus_on_same_button(self):
+        """After like/unlike, focus should stay on that comment's like button."""
+        comment = make_comment(id="c1")
+        comment.is_liked = False
+        comment.likes = 0
+        post = make_post(id="p1", comments=[comment])
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+
+            block = screen.query_one(PostBlock)
+            block.action_enter_post_mode()
+            await pilot.pause()
+
+            btn = screen.query_one("#comment-like-c1", Button)
+            btn.focus()
+            await pilot.pause()
+            assert app.focused is btn
+
+            await screen.on_post_block_comment_like_requested(
+                PostBlock.CommentLikeRequested(comment)
+            )
+            await pilot.pause()
+
+            assert isinstance(app.focused, Button)
+            assert app.focused.id == "comment-like-c1"
+
+
+class TestHiddenPostsGrouping:
+    """Test grouping hidden posts at bottom of home feed."""
+
+    @pytest.mark.asyncio
+    async def test_hidden_posts_not_in_main_feed(self):
+        """Hidden posts should not be direct children in home feed."""
+        visible = make_post(id="p1")
+        hidden = make_post(id="p2")
+        hidden.is_hidden = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[visible, hidden]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            container = screen.query_one("#feed-container")
+            direct_posts = [c for c in container.children if isinstance(c, PostBlock)]
+            assert len(direct_posts) == 1
+            assert direct_posts[0].post.id == "p1"
+
+    @pytest.mark.asyncio
+    async def test_hidden_posts_collapsible_shown(self):
+        """Home feed should show a collapsible section for hidden posts."""
+        visible = make_post(id="p1")
+        hidden = make_post(id="p2")
+        hidden.is_hidden = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[visible, hidden]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            collapsible = screen.query_one(Collapsible)
+            assert "Hidden 1 post" in str(collapsible.title)
+
+            hidden_block = next(
+                block for block in screen.query(PostBlock) if block.post.id == "p2"
+            )
+            assert isinstance(hidden_block.parent, Collapsible.Contents)
+
+    @pytest.mark.asyncio
+    async def test_no_collapsible_when_no_hidden_posts(self):
+        """Home feed should not render collapsible when there are no hidden posts."""
+        posts = [make_post(id="p1"), make_post(id="p2")]
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=posts))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert len(list(screen.query(Collapsible))) == 0
+
+    @pytest.mark.asyncio
+    async def test_hidden_posts_plural_label(self):
+        """Collapsible label should use plural when there are multiple hidden posts."""
+        hidden1 = make_post(id="p1")
+        hidden1.is_hidden = True
+        hidden2 = make_post(id="p2")
+        hidden2.is_hidden = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[hidden1, hidden2]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            collapsible = screen.query_one(Collapsible)
+            assert "Hidden 2 posts" in str(collapsible.title)
+
+    @pytest.mark.asyncio
+    async def test_hide_mid_session_moves_post_to_hidden(self):
+        """Hiding a visible post should move it into hidden section."""
+        post = make_post(id="p1")
+        post.is_hidden = False
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert len(list(screen.query(Collapsible))) == 0
+            await screen.on_post_block_hide_requested(PostBlock.HideRequested(post))
+            await pilot.pause()
+            collapsible = screen.query_one(Collapsible)
+            assert "Hidden 1 post" in str(collapsible.title)
+
+    @pytest.mark.asyncio
+    async def test_unhide_mid_session_removes_collapsible(self):
+        """Unhiding the last hidden post should remove hidden section."""
+        post = make_post(id="p1")
+        post.is_hidden = True
+        api = _make_mock_api(get_home_feed=AsyncMock(return_value=[post]))
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state, api=api)
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app._original_push(FeedScreen(state))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, FeedScreen)
+            assert len(list(screen.query(Collapsible))) == 1
+            await screen.on_post_block_hide_requested(PostBlock.HideRequested(post))
+            await pilot.pause()
+            assert len(list(screen.query(Collapsible))) == 0
 
 
 class TestHideUnhide:

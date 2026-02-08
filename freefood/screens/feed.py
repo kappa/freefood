@@ -2,7 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.widgets import Button, Static
+from textual.widgets import Button, Collapsible, Static
 
 from freefood.config import get_username
 from freefood.models import Post, View
@@ -204,12 +204,7 @@ class FeedScreen(BaseScreen):
             if not self.posts:
                 container.mount(Static("No posts found", classes="loading"))
             else:
-                for post in self.posts:
-                    container.mount(PostBlock(post))
-                # Focus first post so user can scroll with keyboard
-                first_post = container.query(PostBlock).first()
-                if first_post:
-                    first_post.focus()
+                self._mount_post_blocks(container)
 
         except Exception as e:
             container.remove_children()
@@ -239,6 +234,59 @@ class FeedScreen(BaseScreen):
         if screen_name and screen_name != target:
             return f"@{target} - {screen_name}"
         return f"@{target}"
+
+    def _mount_post_blocks(self, container) -> None:
+        """Mount post blocks, grouping hidden posts in home feed."""
+        if self.state.current_view == View.HOME:
+            visible_posts = [p for p in self.posts if not p.is_hidden]
+            hidden_posts = [p for p in self.posts if p.is_hidden]
+
+            for post in visible_posts:
+                container.mount(PostBlock(post, show_hide_button=True))
+
+            if hidden_posts:
+                count = len(hidden_posts)
+                label = f"Hidden {count} post{'s' if count != 1 else ''}"
+                hidden_blocks = [
+                    PostBlock(post, show_hide_button=True) for post in hidden_posts
+                ]
+                collapsible = Collapsible(
+                    *hidden_blocks,
+                    title=label,
+                    collapsed=True,
+                )
+                container.mount(collapsible)
+        else:
+            for post in self.posts:
+                container.mount(PostBlock(post, show_hide_button=False))
+
+        first_post = next(iter(container.query(PostBlock)), None)
+        if first_post:
+            first_post.focus()
+
+    def _rebuild_feed_layout(self) -> None:
+        """Rebuild post layout while preserving header/compose widgets."""
+        container = self.query_one("#feed-container")
+        for block in list(container.query(PostBlock)):
+            block.remove()
+        for collapsible in list(container.query(Collapsible)):
+            collapsible.remove()
+        for loading in list(container.query("Static.loading")):
+            loading.remove()
+
+        if not self.posts:
+            container.mount(Static("No posts found", classes="loading"))
+            return
+
+        self._mount_post_blocks(container)
+
+    def _focus_button_in_post_block(self, block: PostBlock, button_id: str) -> None:
+        """Focus a button in a post block after a recompose, if it exists."""
+        try:
+            button = block.query_one(f"#{button_id}", Button)
+            button.focus()
+        except Exception:
+            pass
 
     def action_focus_menu(self) -> None:
         """Focus the menu bar."""
@@ -354,10 +402,16 @@ class FeedScreen(BaseScreen):
             if post.is_liked:
                 await self.app.api.unlike_post(post.id)
                 post.is_liked = False
+                current_user = self.app.api.current_user
+                if current_user is not None:
+                    post.likes = [u for u in post.likes if u.id != current_user.id]
                 self.notify("Unliked")
             else:
                 await self.app.api.like_post(post.id)
                 post.is_liked = True
+                current_user = self.app.api.current_user
+                if current_user is not None:
+                    post.likes.insert(0, current_user)
                 self.notify("Liked")
             # Refresh the post block
             for block in self.query(PostBlock):
@@ -381,12 +435,40 @@ class FeedScreen(BaseScreen):
                 await self.app.api.hide_post(post.id)
                 post.is_hidden = True
                 self.notify("Hidden")
-            for block in self.query(PostBlock):
-                if block.post.id == post.id:
-                    block.refresh(recompose=True)
-                    break
+            self._rebuild_feed_layout()
         except Exception as e:
             self.show_error("Hide/unhide failed", e)
+
+    async def on_post_block_comment_like_requested(
+        self, message: PostBlock.CommentLikeRequested
+    ) -> None:
+        """Handle comment like/unlike request."""
+        comment = message.comment
+        try:
+            if comment.is_liked:
+                await self.app.api.unlike_comment(comment.id)
+                comment.is_liked = False
+                comment.likes = max(0, comment.likes - 1)
+                self.notify("Comment unliked")
+            else:
+                await self.app.api.like_comment(comment.id)
+                comment.is_liked = True
+                comment.likes += 1
+                self.notify("Comment liked")
+
+            for block in self.query(PostBlock):
+                for block_comment in block.post.comments:
+                    if block_comment.id == comment.id:
+                        block.refresh(recompose=True)
+                        self.set_timer(
+                            0.05,
+                            lambda b=block, c=comment: self._focus_button_in_post_block(
+                                b, f"comment-like-{c.id}"
+                            ),
+                        )
+                        return
+        except Exception as e:
+            self.show_error("Comment like/unlike failed", e)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle subscribe/unsubscribe button."""

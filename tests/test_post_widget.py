@@ -92,6 +92,12 @@ class TestPostBlockMessages:
         assert msg.username == "alice"
         assert msg.user_type == "user"
 
+    def test_comment_like_requested_message_exists(self):
+        """CommentLikeRequested message should be defined and instantiable."""
+        comment = make_comment()
+        msg = PostBlock.CommentLikeRequested(comment)
+        assert msg.comment is comment
+
 
 class TestPostBlockBindings:
     """Tests for PostBlock keyboard bindings."""
@@ -451,6 +457,39 @@ class TestPostBlockComposeActionButtons:
             with pytest.raises(NoMatches):
                 app.query_one("#btn-delete")
 
+    @pytest.mark.asyncio
+    async def test_like_button_not_shown_for_own_post(self):
+        """Like button should NOT render for own posts."""
+        from textual.app import App
+        from textual.css.query import NoMatches
+
+        post = make_post(is_own=True)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            with pytest.raises(NoMatches):
+                app.query_one("#btn-like")
+
+    @pytest.mark.asyncio
+    async def test_like_button_shown_for_other_post(self):
+        """Like button should render for non-own posts."""
+        from textual.app import App
+
+        post = make_post(is_own=False)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_like = app.query_one("#btn-like")
+            assert btn_like is not None
+
 
 class TestPostBlockShowMoreButton:
     """Tests for Show More button rendering."""
@@ -593,6 +632,29 @@ class TestPostBlockOnButtonPressed:
         assert isinstance(msg, PostBlock.UserClicked)
         assert msg.username == "alice"
         assert msg.user_type == "user"
+
+    def test_comment_like_button_emits_message(self):
+        """comment-like button press should emit CommentLikeRequested."""
+        from unittest.mock import Mock, patch
+
+        from textual.widgets import Button
+
+        comment = make_comment(id="c1")
+        post = make_post(comments=[comment])
+        widget = PostBlock(post)
+
+        mock_button = Mock(spec=Button)
+        mock_button.id = "comment-like-c1"
+        mock_event = Mock(spec=Button.Pressed)
+        mock_event.button = mock_button
+
+        with patch.object(widget, "post_message") as mock_post_message:
+            widget.on_button_pressed(mock_event)
+
+        mock_post_message.assert_called_once()
+        msg = mock_post_message.call_args[0][0]
+        assert isinstance(msg, PostBlock.CommentLikeRequested)
+        assert msg.comment is comment
 
 
 class TestPostBlockUserLinks:
@@ -881,6 +943,39 @@ class TestPostBlockHideButtonLabel:
             label_text = btn_hide.label.plain
             assert label_text == "Unhide"
 
+    @pytest.mark.asyncio
+    async def test_hide_button_hidden_when_show_hide_button_false(self):
+        """Hide button should not render when show_hide_button=False."""
+        from textual.app import App
+        from textual.css.query import NoMatches
+
+        post = make_post(is_hidden=False)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post, show_hide_button=False)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            with pytest.raises(NoMatches):
+                app.query_one("#btn-hide")
+
+    @pytest.mark.asyncio
+    async def test_hide_button_shown_when_show_hide_button_true(self):
+        """Hide button should render when show_hide_button=True."""
+        from textual.app import App
+
+        post = make_post(is_hidden=False)
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post, show_hide_button=True)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn_hide = app.query_one("#btn-hide")
+            assert btn_hide is not None
+
 
 def make_comment(
     id: str = "c1",
@@ -896,6 +991,188 @@ def make_comment(
         created_at=datetime.now(),
         likes=likes,
     )
+
+
+class TestCommentLikeButton:
+    """Tests for comment like button rendering and focus behavior."""
+
+    @pytest.mark.asyncio
+    async def test_comment_like_button_rendered(self):
+        """Comment like button should render in post mode."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            block = app.query_one(PostBlock)
+            block.action_enter_post_mode()
+            await pilot.pause()
+
+            btn = app.query_one("#comment-like-c1", Button)
+            assert "Like" in btn.label.plain
+
+    @pytest.mark.asyncio
+    async def test_comment_unlike_button_when_liked(self):
+        """Comment like button should show Unlike when comment is liked."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        comment.is_liked = True
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            block = app.query_one(PostBlock)
+            block.action_enter_post_mode()
+            await pilot.pause()
+
+            btn = app.query_one("#comment-like-c1", Button)
+            assert "Unlike" in btn.label.plain
+
+    @pytest.mark.asyncio
+    async def test_comment_like_button_not_focusable_outside_post_mode(self):
+        """Comment like button should not be focusable outside post mode."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn = app.query_one("#comment-like-c1", Button)
+            assert btn.can_focus is False
+
+    @pytest.mark.asyncio
+    async def test_comment_like_button_is_single_line(self):
+        """Comment like button should match post-like button height."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            block = app.query_one(PostBlock)
+            block.action_enter_post_mode()
+            await pilot.pause()
+
+            comment_btn = app.query_one("#comment-like-c1", Button)
+            post_btn = app.query_one("#btn-like", Button)
+            assert comment_btn.region.height == post_btn.region.height
+
+    @pytest.mark.asyncio
+    async def test_comment_edit_delete_buttons_are_single_line(self):
+        """Own-comment edit/delete should match post-like button height."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        comment.is_own = True
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            block = app.query_one(PostBlock)
+            block.action_enter_post_mode()
+            await pilot.pause()
+
+            btn_edit = app.query_one("#comment-edit-c1", Button)
+            btn_delete = app.query_one("#comment-delete-c1", Button)
+            post_btn = app.query_one("#btn-like", Button)
+            assert btn_edit.region.height == post_btn.region.height
+            assert btn_delete.region.height == post_btn.region.height
+
+    @pytest.mark.asyncio
+    async def test_comment_like_button_not_shown_for_own_comment(self):
+        """Own comments should not render a like button."""
+        from textual.app import App
+        from textual.css.query import NoMatches
+
+        comment = make_comment(id="c1")
+        comment.is_own = True
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            with pytest.raises(NoMatches):
+                app.query_one("#comment-like-c1", Button)
+
+    @pytest.mark.asyncio
+    async def test_comment_like_button_shown_for_other_comment(self):
+        """Non-own comments should render a like button."""
+        from textual.app import App
+
+        comment = make_comment(id="c1")
+        comment.is_own = False
+        post = make_post(comments=[comment])
+
+        class TestApp(App):
+            def compose(self):
+                yield PostBlock(post)
+
+        async with TestApp().run_test() as pilot:
+            app = pilot.app
+            btn = app.query_one("#comment-like-c1", Button)
+            assert btn is not None
+
+    @pytest.mark.asyncio
+    async def test_comment_edit_and_like_mutually_exclusive(self):
+        """Own comment shows edit/delete; non-own shows like."""
+        from textual.app import App
+        from textual.css.query import NoMatches
+
+        own_comment = make_comment(id="c1")
+        own_comment.is_own = True
+        own_post = make_post(comments=[own_comment])
+
+        class OwnApp(App):
+            def compose(self):
+                yield PostBlock(own_post)
+
+        async with OwnApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#comment-edit-c1", Button)
+            with pytest.raises(NoMatches):
+                app.query_one("#comment-like-c1", Button)
+
+        other_comment = make_comment(id="c2")
+        other_comment.is_own = False
+        other_post = make_post(comments=[other_comment])
+
+        class OtherApp(App):
+            def compose(self):
+                yield PostBlock(other_post)
+
+        async with OtherApp().run_test() as pilot:
+            app = pilot.app
+            app.query_one("#comment-like-c2", Button)
+            with pytest.raises(NoMatches):
+                app.query_one("#comment-edit-c2", Button)
 
 
 class TestCommentBlockFocusable:

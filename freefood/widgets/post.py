@@ -70,6 +70,11 @@ class CommentBlock(Widget):
         border: none;
         margin-right: 1;
     }
+
+    CommentBlock #edit-comment-body {
+        height: 3;
+        border: none;
+    }
     """
 
     MAX_COMMENT_LINES = 10
@@ -136,12 +141,23 @@ class CommentBlock(Widget):
                     yield author_btn
                 else:
                     yield Static("@unknown")
+                if not self.comment.is_own:
+                    like_label = "Unlike" if self.comment.is_liked else "Like"
+                    like_btn = Button(
+                        like_label,
+                        id=f"comment-like-{self.comment.id}",
+                        classes="comment-like-btn",
+                        compact=True,
+                    )
+                    like_btn.can_focus = self.can_focus
+                    yield like_btn
                 # Edit and Delete buttons for own comments
                 if self.comment.is_own:
                     edit_btn = Button(
                         "Edit",
                         id=f"comment-edit-{self.comment.id}",
                         classes="comment-edit-btn",
+                        compact=True,
                     )
                     edit_btn.can_focus = self.can_focus
                     yield edit_btn
@@ -150,6 +166,7 @@ class CommentBlock(Widget):
                             "Confirm",
                             id=f"comment-confirm-delete-{self.comment.id}",
                             classes="comment-confirm-delete-btn",
+                            compact=True,
                         )
                         confirm_btn.can_focus = self.can_focus
                         yield confirm_btn
@@ -157,6 +174,7 @@ class CommentBlock(Widget):
                             "Cancel",
                             id=f"comment-cancel-delete-{self.comment.id}",
                             classes="comment-cancel-delete-btn",
+                            compact=True,
                         )
                         cancel_btn.can_focus = self.can_focus
                         yield cancel_btn
@@ -165,6 +183,7 @@ class CommentBlock(Widget):
                             "Delete",
                             id=f"comment-delete-{self.comment.id}",
                             classes="comment-delete-btn",
+                            compact=True,
                         )
                         delete_btn.can_focus = self.can_focus
                         yield delete_btn
@@ -247,6 +266,19 @@ class PostBlock(Widget, can_focus=True):
         min-width: 8;
         height: 1;
         border: none;
+        margin-right: 1;
+    }
+
+    PostBlock .comment-like-btn,
+    PostBlock .comment-edit-btn,
+    PostBlock .comment-delete-btn,
+    PostBlock .comment-confirm-delete-btn,
+    PostBlock .comment-cancel-delete-btn {
+        min-width: 0;
+        min-height: 1;
+        height: 1;
+        border: none;
+        padding: 0 1;
         margin-right: 1;
     }
 
@@ -354,6 +386,13 @@ class PostBlock(Widget, can_focus=True):
             self.comment = comment
             super().__init__()
 
+    class CommentLikeRequested(Message):
+        """Request to like/unlike a comment."""
+
+        def __init__(self, comment: Comment) -> None:
+            self.comment = comment
+            super().__init__()
+
     class AttachmentOpened(Message):
         """Request to open an attachment."""
 
@@ -361,7 +400,12 @@ class PostBlock(Widget, can_focus=True):
             self.attachment = attachment
             super().__init__()
 
-    def __init__(self, post: Post, highlight_terms: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        post: Post,
+        highlight_terms: list[str] | None = None,
+        show_hide_button: bool = True,
+    ) -> None:
         """Initialize post widget."""
         super().__init__()
         self.post = post
@@ -369,6 +413,7 @@ class PostBlock(Widget, can_focus=True):
         self.comments_expanded = False
         self.post_mode = False  # When True, buttons are focusable
         self.highlight_terms = highlight_terms or []
+        self.show_hide_button = show_hide_button
         self.editing_post = False  # When True, post body is editable
         self.confirming_delete = False  # When True, show delete confirmation
 
@@ -450,14 +495,16 @@ class PostBlock(Widget, can_focus=True):
                     btn_comment = Button("Comment", id="btn-comment")
                     btn_comment.can_focus = self.post_mode
                     yield btn_comment
-                    like_label = "Unlike" if self.post.is_liked else "Like"
-                    btn_like = Button(f"♥ {like_label}", id="btn-like")
-                    btn_like.can_focus = self.post_mode
-                    yield btn_like
-                    hide_label = "Unhide" if self.post.is_hidden else "Hide"
-                    btn_hide = Button(hide_label, id="btn-hide")
-                    btn_hide.can_focus = self.post_mode
-                    yield btn_hide
+                    if not self.post.is_own:
+                        like_label = "Unlike" if self.post.is_liked else "Like"
+                        btn_like = Button(f"♥ {like_label}", id="btn-like")
+                        btn_like.can_focus = self.post_mode
+                        yield btn_like
+                    if self.show_hide_button:
+                        hide_label = "Unhide" if self.post.is_hidden else "Hide"
+                        btn_hide = Button(hide_label, id="btn-hide")
+                        btn_hide.can_focus = self.post_mode
+                        yield btn_hide
                     if self.post.is_own:
                         btn_edit = Button("Edit", id="btn-edit")
                         btn_edit.can_focus = self.post_mode
@@ -678,6 +725,12 @@ class PostBlock(Widget, can_focus=True):
             self._cancel_delete_confirmation()
         elif event.button.id == "btn-confirm-delete":
             self._confirm_delete()
+        elif event.button.id and event.button.id.startswith("comment-like-"):
+            comment_id = event.button.id[len("comment-like-") :]
+            for comment in self.post.comments:
+                if comment.id == comment_id:
+                    self.post_message(self.CommentLikeRequested(comment))
+                    break
         elif event.button.id and event.button.id.startswith("comment-edit-"):
             comment_id = event.button.id[len("comment-edit-") :]
             self._start_editing_comment(comment_id)
