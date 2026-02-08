@@ -3,6 +3,7 @@
 from textual.screen import Screen
 from textual.widgets import Static
 
+from freefood.base_app import FreeFoodAppBase
 from freefood.logging import log_error
 
 
@@ -41,3 +42,8 @@ class BaseScreen(Screen):
             banner.remove_class("visible")
         except Exception:
             pass
+
+    @property
+    def app(self) -> FreeFoodAppBase:
+        """Type-hinted app property."""
+        return super().app  # type: ignore

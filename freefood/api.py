@@ -1,11 +1,10 @@
 """FreeFeed API client."""
 
-from datetime import datetime
-
 import httpx
-from httpx import URL
 
-from .models import Attachment, Comment, Notification, Post, User
+from freefood.errors import ApiError, NetworkError
+from freefood.models import Comment, Notification, Post, User
+from freefood.parsers import ResponseParser
 
 
 class FreeFeedAPI:
@@ -19,6 +18,7 @@ class FreeFeedAPI:
         self.base_url = base_url or self.DEFAULT_BASE_URL
         self.current_user: User | None = None
         self._client: httpx.AsyncClient | None = None
+        self._parser = ResponseParser(self.base_url)
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -36,187 +36,48 @@ class FreeFeedAPI:
             await self._client.aclose()
             self._client = None
 
+    async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Make an HTTP request with error handling."""
+        try:
+            client = await self._get_client()
+            response = await client.request(method, path, **kwargs)
+            response.raise_for_status()
+            return response
+        except httpx.NetworkError as e:
+            raise NetworkError(f"Network error: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise ApiError(f"API error: {e.response.status_code} {e.response.text}") from e
+        except httpx.RequestError as e:
+            raise NetworkError(f"Request error: {e}") from e
+
     async def validate_token(self) -> User:
         """Validate token and return current user."""
-        client = await self._get_client()
-        response = await client.get("/v4/users/whoami")
-        response.raise_for_status()
+        response = await self._request("GET", "/v4/users/whoami")
         data = response.json()
-        self.current_user = self._parse_user(data["users"])
+        self.current_user = self._parser.parse_user(data["users"])
         return self.current_user
-
-    def _parse_user(self, data: dict) -> User:
-        """Parse user data from API response."""
-        return User(
-            id=data["id"],
-            username=data["username"],
-            screen_name=data.get("screenName", data["username"]),
-            type=data.get("type", "user"),
-            profile_picture_url=data.get("profilePictureMediumUrl"),
-        )
-
-    def _parse_comment(self, data: dict, users_by_id: dict[str, User]) -> Comment:
-        """Parse comment data from API response."""
-        author = users_by_id.get(data["createdBy"])
-        is_own = (
-            author is not None
-            and self.current_user is not None
-            and author.id == self.current_user.id
-        )
-        return Comment(
-            id=data["id"],
-            body=data["body"],
-            author=author,
-            created_at=datetime.fromtimestamp(int(data["createdAt"]) / 1000),
-            likes=data.get("likes", 0),
-            is_liked=data.get("hasOwnLike", False),
-            is_own=is_own,
-        )
-
-    def _get_attachment_url(self, attachment_data: dict) -> str | None:
-        """Constructs an attachment URL based on available data."""
-        att_id = attachment_data.get("id")
-
-        if not att_id:
-            return None
-
-        # Priority 1: Check if 'url' is directly provided (as per design spec)
-        if attachment_data.get("url"):
-            # Ensure base_url is also joined with the raw URL if it's relative
-            return str(URL(self.base_url).join(attachment_data["url"]))
-
-        # Priority 2: Use /v4/attachments/{id}/original?redirect= for direct download
-        # Use httpx.URL for robust path joining
-        base_url_obj = URL(self.base_url)
-        constructed_path = f"/v4/attachments/{att_id}/original"
-        final_url_obj = base_url_obj.join(constructed_path).copy_with(
-            params={"redirect": ""}
-        )
-
-        constructed_url = str(final_url_obj)
-        return constructed_url
-
-    def _denormalize_posts(self, data: dict) -> list[Post]:
-        """Convert normalized API response to Post objects."""
-        users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
-        for group in data.get("groups", []):
-            users_by_id[group["id"]] = self._parse_user(group)
-        direct_subscriptions = {}
-        for subscription in data.get("subscriptions", []):
-            if subscription.get("name") == "Directs":
-                user = users_by_id.get(subscription.get("user"))
-                if user is not None:
-                    direct_subscriptions[subscription.get("id")] = user
-        comments_by_id = {
-            c["id"]: self._parse_comment(c, users_by_id)
-            for c in data.get("comments", [])
-        }
-        attachments_by_id = {}  # Initialize the dictionary
-        for a in data.get("attachments", []):
-            attachment_url = self._get_attachment_url(a)
-            if not attachment_url:
-                continue
-
-            attachments_by_id[a["id"]] = Attachment(
-                id=a["id"],
-                file_name=a.get("fileName", ""),
-                file_size=int(a.get("fileSize", 0)),
-                media_type=a.get("mediaType", ""),
-                url=attachment_url,
-                thumbnail_url=a.get("thumbnailUrl"),
-            )
-
-        # Handle both list (timelines) and dict (single post) response formats
-        posts_data = data.get("posts", [])
-        if isinstance(posts_data, dict):
-            posts_data = [posts_data]
-
-        posts = []
-        for p in posts_data:
-            author = users_by_id.get(p["createdBy"])
-            post_comments = [
-                comments_by_id[cid]
-                for cid in p.get("comments", [])
-                if cid in comments_by_id
-            ]
-            post_likes = [
-                users_by_id[uid] for uid in p.get("likes", []) if uid in users_by_id
-            ]
-            post_attachments = [
-                attachments_by_id[aid]
-                for aid in p.get("attachments", [])
-                if aid in attachments_by_id
-            ]
-            groups = [
-                users_by_id[fid]
-                for fid in p.get("postedTo", [])
-                if fid in users_by_id and users_by_id[fid].type == "group"
-            ]
-            direct_recipients = [
-                direct_subscriptions[fid]
-                for fid in p.get("postedTo", [])
-                if fid in direct_subscriptions
-            ]
-            if author is not None:
-                direct_recipients = [
-                    recipient
-                    for recipient in direct_recipients
-                    if recipient.id != author.id
-                ]
-            is_own = (
-                author is not None
-                and self.current_user is not None
-                and author.id == self.current_user.id
-            )
-
-            posts.append(
-                Post(
-                    id=p["id"],
-                    body=p["body"],
-                    author=author,
-                    groups=groups,
-                    created_at=datetime.fromtimestamp(int(p["createdAt"]) / 1000),
-                    updated_at=datetime.fromtimestamp(int(p["updatedAt"]) / 1000),
-                    comments=post_comments,
-                    omitted_comments=p.get("omittedComments", 0),
-                    omitted_comments_offset=p.get("omittedCommentsOffset", 0),
-                    omitted_comment_likes=p.get("omittedCommentLikes", 0),
-                    omitted_likes=p.get("omittedLikes", 0),
-                    likes=post_likes,
-                    attachments=post_attachments,
-                    direct_recipients=direct_recipients,
-                    is_liked=p.get("hasOwnLike", False),
-                    is_hidden=p.get("isHidden", False),
-                    is_own=is_own,
-                )
-            )
-        return posts
 
     async def get_home_feed(self, offset: int = 0, limit: int = 30) -> list[Post]:
         """Fetch home timeline."""
-        client = await self._get_client()
-        response = await client.get(
-            "/v4/timelines/home", params={"offset": offset, "limit": limit}
+        response = await self._request(
+            "GET", "/v4/timelines/home", params={"offset": offset, "limit": limit}
         )
-        response.raise_for_status()
-        return self._denormalize_posts(response.json())
+        return self._parser.denormalize_posts(response.json(), self.current_user)
 
     async def get_user_feed(
         self, username: str, offset: int = 0, limit: int = 30
     ) -> list[Post]:
         """Fetch user timeline."""
-        client = await self._get_client()
-        response = await client.get(
-            f"/v4/timelines/{username}", params={"offset": offset, "limit": limit}
+        response = await self._request(
+            "GET",
+            f"/v4/timelines/{username}",
+            params={"offset": offset, "limit": limit},
         )
-        response.raise_for_status()
-        return self._denormalize_posts(response.json())
+        return self._parser.denormalize_posts(response.json(), self.current_user)
 
     async def get_user_subscription_status(self, username: str) -> bool:
         """Return whether current user is subscribed to the given user."""
-        client = await self._get_client()
-        response = await client.get(f"/v4/users/{username}")
-        response.raise_for_status()
+        response = await self._request("GET", f"/v4/users/{username}")
         data = response.json()
 
         for key in ("youAreSubscribed", "youSubscribed", "isSubscribed", "subscribed"):
@@ -241,186 +102,128 @@ class FreeFeedAPI:
 
     async def get_directs(self, offset: int = 0, limit: int = 30) -> list[Post]:
         """Fetch direct messages."""
-        client = await self._get_client()
-        response = await client.get(
-            "/v4/timelines/filter/directs", params={"offset": offset, "limit": limit}
+        response = await self._request(
+            "GET",
+            "/v4/timelines/filter/directs",
+            params={"offset": offset, "limit": limit},
         )
-        response.raise_for_status()
-        return self._denormalize_posts(response.json())
+        return self._parser.denormalize_posts(response.json(), self.current_user)
 
     async def get_notifications(
         self, offset: int = 0, limit: int = 30
     ) -> list[Notification]:
         """Fetch notifications."""
-        client = await self._get_client()
-        response = await client.get(
-            "/v4/notifications", params={"offset": offset, "limit": limit}
+        response = await self._request(
+            "GET", "/v4/notifications", params={"offset": offset, "limit": limit}
         )
-        response.raise_for_status()
-        data = response.json()
-
-        users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
-        notifications = []
-        for item in data.get("Notifications", []):
-            created_user_id = item.get("created_user_id", item.get("createdBy"))
-            created_user = users_by_id.get(created_user_id)
-            if "date" in item and item["date"]:
-                created_at = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
-            else:
-                created_at = datetime.fromtimestamp(
-                    int(item.get("createdAt", "0")) / 1000
-                )
-            notifications.append(
-                Notification(
-                    id=item.get("id", ""),
-                    event_id=item.get("eventId", item.get("event_id", "")),
-                    event_type=item.get("eventType", item.get("event_type", "")),
-                    date=created_at,
-                    created_user=created_user,
-                    post_id=item.get(
-                        "postId", item.get("post_id", item.get("target_post_id"))
-                    ),
-                    comment_id=item.get(
-                        "commentId",
-                        item.get("comment_id", item.get("target_comment_id")),
-                    ),
-                )
-            )
-        return notifications
+        return self._parser.parse_notifications(response.json())
 
     async def get_unread_notifications_count(self) -> int:
         """Fetch unread notifications count."""
-        client = await self._get_client()
-        response = await client.get("/v4/users/whoami")
-        response.raise_for_status()
+        response = await self._request("GET", "/v4/users/whoami")
         data = response.json()
         return int(data.get("unreadNotificationsNumber", 0))
 
     async def get_unread_directs_count(self) -> int:
         """Fetch unread directs count."""
-        client = await self._get_client()
-        response = await client.get("/v4/users/whoami")
-        response.raise_for_status()
+        response = await self._request("GET", "/v4/users/whoami")
         data = response.json()
         return int(data.get("unreadDirectsNumber", 0))
 
     async def search(self, query: str, offset: int = 0, limit: int = 30) -> list[Post]:
         """Search posts."""
-        client = await self._get_client()
-        response = await client.get(
-            "/v4/search", params={"q": query, "offset": offset, "limit": limit}
+        response = await self._request(
+            "GET", "/v4/search", params={"q": query, "offset": offset, "limit": limit}
         )
-        response.raise_for_status()
-        return self._denormalize_posts(response.json())
+        return self._parser.denormalize_posts(response.json(), self.current_user)
 
     async def get_post(self, post_id: str) -> Post | None:
         """Fetch single post with all comments."""
-        client = await self._get_client()
-        response = await client.get(
-            f"/v4/posts/{post_id}", params={"maxComments": "all", "maxLikes": "all"}
+        response = await self._request(
+            "GET",
+            f"/v4/posts/{post_id}",
+            params={"maxComments": "all", "maxLikes": "all"},
         )
-        response.raise_for_status()
-        posts = self._denormalize_posts(response.json())
+        posts = self._parser.denormalize_posts(response.json(), self.current_user)
         return posts[0] if posts else None
 
     # Post actions
     async def like_post(self, post_id: str) -> None:
         """Like a post."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/posts/{post_id}/like")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/posts/{post_id}/like")
 
     async def unlike_post(self, post_id: str) -> None:
         """Unlike a post."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/posts/{post_id}/unlike")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/posts/{post_id}/unlike")
 
     async def hide_post(self, post_id: str) -> None:
         """Hide a post."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/posts/{post_id}/hide")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/posts/{post_id}/hide")
 
     async def unhide_post(self, post_id: str) -> None:
         """Unhide a post."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/posts/{post_id}/unhide")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/posts/{post_id}/unhide")
 
     async def create_post(self, body: str, feeds: list[str]) -> Post:
         """Create a new post."""
-        client = await self._get_client()
-        response = await client.post(
-            "/v4/posts", json={"post": {"body": body}, "meta": {"feeds": feeds}}
+        response = await self._request(
+            "POST",
+            "/v4/posts",
+            json={"post": {"body": body}, "meta": {"feeds": feeds}},
         )
-        response.raise_for_status()
-        posts = self._denormalize_posts(response.json())
+        posts = self._parser.denormalize_posts(response.json(), self.current_user)
         return posts[0]
 
     async def subscribe(self, username: str) -> None:
         """Subscribe to a user."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/users/{username}/subscribe")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/users/{username}/subscribe")
 
     async def unsubscribe(self, username: str) -> None:
         """Unsubscribe from a user."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/users/{username}/unsubscribe")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/users/{username}/unsubscribe")
 
     async def update_post(self, post_id: str, body: str) -> Post:
         """Update a post."""
-        client = await self._get_client()
-        response = await client.put(
-            f"/v4/posts/{post_id}", json={"post": {"body": body}}
+        response = await self._request(
+            "PUT", f"/v4/posts/{post_id}", json={"post": {"body": body}}
         )
-        response.raise_for_status()
-        posts = self._denormalize_posts(response.json())
+        posts = self._parser.denormalize_posts(response.json(), self.current_user)
         return posts[0]
 
     async def delete_post(self, post_id: str) -> None:
         """Delete a post."""
-        client = await self._get_client()
-        response = await client.delete(f"/v4/posts/{post_id}")
-        response.raise_for_status()
+        await self._request("DELETE", f"/v4/posts/{post_id}")
 
     # Comment actions
     async def create_comment(self, post_id: str, body: str) -> Comment:
         """Create a comment on a post."""
-        client = await self._get_client()
-        response = await client.post(
-            "/v4/comments", json={"comment": {"body": body, "postId": post_id}}
+        response = await self._request(
+            "POST",
+            "/v4/comments",
+            json={"comment": {"body": body, "postId": post_id}},
         )
-        response.raise_for_status()
         data = response.json()
-        # Comment response includes users array
-        users_by_id = {u["id"]: self._parse_user(u) for u in data.get("users", [])}
-        return self._parse_comment(data["comments"], users_by_id)
+        users_by_id = {
+            u["id"]: self._parser.parse_user(u) for u in data.get("users", [])
+        }
+        return self._parser.parse_comment(
+            data["comments"], users_by_id, self.current_user
+        )
 
     async def update_comment(self, comment_id: str, body: str) -> None:
         """Update a comment."""
-        client = await self._get_client()
-        response = await client.put(
-            f"/v4/comments/{comment_id}", json={"comment": {"body": body}}
+        await self._request(
+            "PUT", f"/v4/comments/{comment_id}", json={"comment": {"body": body}}
         )
-        response.raise_for_status()
 
     async def delete_comment(self, comment_id: str) -> None:
         """Delete a comment."""
-        client = await self._get_client()
-        response = await client.delete(f"/v4/comments/{comment_id}")
-        response.raise_for_status()
+        await self._request("DELETE", f"/v4/comments/{comment_id}")
 
     async def like_comment(self, comment_id: str) -> None:
         """Like a comment."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/comments/{comment_id}/like")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/comments/{comment_id}/like")
 
     async def unlike_comment(self, comment_id: str) -> None:
         """Unlike a comment."""
-        client = await self._get_client()
-        response = await client.post(f"/v4/comments/{comment_id}/unlike")
-        response.raise_for_status()
+        await self._request("POST", f"/v4/comments/{comment_id}/unlike")
