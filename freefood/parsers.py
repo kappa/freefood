@@ -72,19 +72,19 @@ class ResponseParser:
         users_by_id = {u["id"]: self.parse_user(u) for u in data.get("users", [])}
         for group in data.get("groups", []):
             users_by_id[group["id"]] = self.parse_user(group)
-        
+
         direct_subscriptions = {}
         for subscription in data.get("subscriptions", []):
             if subscription.get("name") == "Directs":
                 user = users_by_id.get(subscription.get("user"))
                 if user is not None:
                     direct_subscriptions[subscription.get("id")] = user
-        
+
         comments_by_id = {
             c["id"]: self.parse_comment(c, users_by_id, current_user)
             for c in data.get("comments", [])
         }
-        
+
         attachments_by_id = {}  # Initialize the dictionary
         for a in data.get("attachments", []):
             attachment_url = self.get_attachment_url(a)
@@ -173,7 +173,7 @@ class ResponseParser:
         for item in data.get("Notifications", []):
             created_user_id = item.get("created_user_id", item.get("createdBy"))
             created_user = users_by_id.get(created_user_id)
-            if "date" in item:
+            if "date" in item and item["date"]:
                 created_at = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
             else:
                 created_at = datetime.fromtimestamp(

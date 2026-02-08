@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
-from freefood.models import Notification, Post, View
+from freefood.models import Notification, View
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
@@ -68,10 +68,7 @@ class NotificationsScreen(BaseScreen):
         container.mount(Static("Loading notifications...", classes="loading"))
 
         try:
-            api = self.app.api
-            if api is None:
-                raise Exception("Not connected")
-
+            api = self.api
             self.notifications = await api.get_notifications()
             container.remove_children()
 
@@ -168,12 +165,8 @@ class NotificationsScreen(BaseScreen):
         self, message: NotificationBlock.PostClicked
     ) -> None:
         """Handle navigation to a single post."""
-        api = self.app.api
-        if api is None:
-            self.show_error("Not connected")
-            return
         try:
-            post: Post = await api.get_post(message.post_id)
+            post = await self.api.get_post(message.post_id)
             from freefood.screens.post import PostScreen
 
             self.app.push_screen(PostScreen(self.state, post=post))

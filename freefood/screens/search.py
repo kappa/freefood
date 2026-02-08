@@ -2,17 +2,17 @@
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, ScrollableContainer, Vertical
-from textual.screen import Screen
 from textual.widgets import Button, Input, Static
 
 from freefood.models import Post, View
+from freefood.screens.base import BaseScreen
 from freefood.search import parse_search_terms
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
 
-class SearchScreen(Screen):
+class SearchScreen(BaseScreen):
     """Screen for searching posts."""
 
     BINDINGS = [
@@ -94,11 +94,7 @@ class SearchScreen(Screen):
         container = self.query_one("#search-results", ScrollableContainer)
 
         try:
-            api = self.app.api
-            if api is None:
-                raise Exception("Not connected")
-
-            self.posts = await api.search(query)
+            self.posts = await self.api.search(query)
             await container.remove_children()
 
             if not self.posts:

@@ -2,12 +2,13 @@
 
 import uuid
 
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer
 
 from freefood.api import FreeFeedAPI
 from freefood.attachments import AttachmentManager
+from freefood.base_app import FreeFoodAppBase
 from freefood.config import get_base_url, get_token, save_token
 from freefood.logging import log_error
 from freefood.models import View
@@ -19,7 +20,7 @@ from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
 
-class FreeFoodApp(App):
+class FreeFoodApp(FreeFoodAppBase):
     """FreeFeed console client."""
 
     TITLE = "FreeFood"

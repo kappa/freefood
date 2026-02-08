@@ -1,7 +1,5 @@
 """Tests for FreeFeed ResponseParser."""
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from freefood.models import User
@@ -233,3 +231,24 @@ def test_parse_notifications_denormalizes_users(parser):
     assert notif.event_type == "post_like"
     assert notif.created_user is not None
     assert notif.created_user.username == "alice"
+
+
+def test_parse_notifications_handles_null_date(parser):
+    """parse_notifications should fallback when date is None."""
+    data = {
+        "Notifications": [
+            {
+                "id": "n1",
+                "eventId": "e1",
+                "event_type": "test",
+                "date": None,
+                "createdAt": "1706097600000",
+            }
+        ],
+        "users": [],
+    }
+
+    notifications = parser.parse_notifications(data)
+
+    assert len(notifications) == 1
+    assert notifications[0].date is not None

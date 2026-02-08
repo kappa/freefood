@@ -153,10 +153,7 @@ class FeedScreen(BaseScreen):
         container.mount(Static("Loading feed...", classes="loading"))
 
         try:
-            api = self.app.api
-            if api is None:
-                raise Exception("Not connected")
-
+            api = self.api
             if self.state.current_view == View.HOME:
                 self.posts = await api.get_home_feed()
             elif self.state.current_view == View.DIRECTS:
@@ -374,7 +371,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Load full comments for a post."""
         try:
-            full_post = await self.app.api.get_post(message.post.id)
+            full_post = await self.api.get_post(message.post.id)
             if full_post:
                 # Find and update the PostBlock
                 for block in self.query(PostBlock):
@@ -400,16 +397,16 @@ class FeedScreen(BaseScreen):
         post = message.post
         try:
             if post.is_liked:
-                await self.app.api.unlike_post(post.id)
+                await self.api.unlike_post(post.id)
                 post.is_liked = False
-                current_user = self.app.api.current_user
+                current_user = self.api.current_user
                 if current_user is not None:
                     post.likes = [u for u in post.likes if u.id != current_user.id]
                 self.notify("Unliked")
             else:
-                await self.app.api.like_post(post.id)
+                await self.api.like_post(post.id)
                 post.is_liked = True
-                current_user = self.app.api.current_user
+                current_user = self.api.current_user
                 if current_user is not None:
                     post.likes.insert(0, current_user)
                 self.notify("Liked")
@@ -428,11 +425,11 @@ class FeedScreen(BaseScreen):
         post = message.post
         try:
             if post.is_hidden:
-                await self.app.api.unhide_post(post.id)
+                await self.api.unhide_post(post.id)
                 post.is_hidden = False
                 self.notify("Unhidden")
             else:
-                await self.app.api.hide_post(post.id)
+                await self.api.hide_post(post.id)
                 post.is_hidden = True
                 self.notify("Hidden")
             self._rebuild_feed_layout()
@@ -446,12 +443,12 @@ class FeedScreen(BaseScreen):
         comment = message.comment
         try:
             if comment.is_liked:
-                await self.app.api.unlike_comment(comment.id)
+                await self.api.unlike_comment(comment.id)
                 comment.is_liked = False
                 comment.likes = max(0, comment.likes - 1)
                 self.notify("Comment unliked")
             else:
-                await self.app.api.like_comment(comment.id)
+                await self.api.like_comment(comment.id)
                 comment.is_liked = True
                 comment.likes += 1
                 self.notify("Comment liked")
@@ -480,12 +477,12 @@ class FeedScreen(BaseScreen):
 
         try:
             if self.is_subscribed:
-                await self.app.api.unsubscribe(self.state.current_target)
+                await self.api.unsubscribe(self.state.current_target)
                 self.is_subscribed = False
                 event.button.label = "Subscribe"
                 self.notify(f"Unsubscribed from @{self.state.current_target}")
             else:
-                await self.app.api.subscribe(self.state.current_target)
+                await self.api.subscribe(self.state.current_target)
                 self.is_subscribed = True
                 event.button.label = "Unsubscribe"
                 self.notify(f"Subscribed to @{self.state.current_target}")
@@ -505,7 +502,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle post creation request."""
         try:
-            await self.app.api.create_post(message.body, message.feeds)
+            await self.api.create_post(message.body, message.feeds)
             # Reset compose block
             compose = self.query_one(ComposeBlock)
             compose.reset()
@@ -520,7 +517,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle comment creation request."""
         try:
-            comment = await self.app.api.create_comment(message.post_id, message.body)
+            comment = await self.api.create_comment(message.post_id, message.body)
             # Find the post block and add the comment
             for block in self.query(PostBlock):
                 if block.post.id == message.post_id:
@@ -537,7 +534,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle post edit request."""
         try:
-            await self.app.api.update_post(message.post.id, message.new_body)
+            await self.api.update_post(message.post.id, message.new_body)
             # Update the post object
             message.post.body = message.new_body
             # Find and refresh the post block
@@ -555,7 +552,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle post delete request."""
         try:
-            await self.app.api.delete_post(message.post.id)
+            await self.api.delete_post(message.post.id)
             # Find the post block and determine next focus target
             blocks = list(self.query(PostBlock))
             current_idx = None
@@ -581,7 +578,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle comment edit request."""
         try:
-            await self.app.api.update_comment(message.comment.id, message.new_body)
+            await self.api.update_comment(message.comment.id, message.new_body)
             # Update the comment object
             message.comment.body = message.new_body
             # Find and refresh the post block containing the comment
@@ -603,7 +600,7 @@ class FeedScreen(BaseScreen):
     ) -> None:
         """Handle comment delete request."""
         try:
-            await self.app.api.delete_comment(message.comment.id)
+            await self.api.delete_comment(message.comment.id)
             # Find the post block containing the comment and remove it
             for block in self.query(PostBlock):
                 for i, comment in enumerate(block.post.comments):

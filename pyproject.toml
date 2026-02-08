@@ -54,16 +54,3 @@ select = ["E", "F", "W", "UP", "B", "I"]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-
-# Textual's Screen.app returns App[Any], so mypy can't see FreeFoodApp's
-# custom attributes (state, api). Suppress until we restructure to break
-# the circular import between app.py and screens.
-[[tool.mypy.overrides]]
-module = [
-    "freefood.screens.feed",
-    "freefood.screens.errors",
-    "freefood.screens.search",
-    "freefood.screens.post",
-    "freefood.screens.notifications",
-]
-disable_error_code = ["attr-defined", "no-any-return"]

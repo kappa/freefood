@@ -2,16 +2,16 @@
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.screen import Screen
 from textual.widgets import Static
 
 from freefood.models import Post, View
+from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
 
-class PostScreen(Screen):
+class PostScreen(BaseScreen):
     """Screen for displaying a single post."""
 
     BINDINGS = [
@@ -63,12 +63,12 @@ class PostScreen(Screen):
 
         try:
             if self.post is None:
-                api = self.app.api
-                if api is None:
-                    raise Exception("Not connected")
                 if self.post_id is None:
                     raise Exception("Missing post id")
-                self.post = await api.get_post(self.post_id)
+                self.post = await self.api.get_post(self.post_id)
+
+            if self.post is None:
+                raise Exception("Post not found")
 
             container.remove_children()
             container.mount(PostBlock(self.post))

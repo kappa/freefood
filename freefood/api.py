@@ -2,7 +2,7 @@
 
 import httpx
 
-from freefood.errors import ApiError, NetworkError
+from freefood.errors import ApiError, AuthError, NetworkError
 from freefood.models import Comment, Notification, Post, User
 from freefood.parsers import ResponseParser
 
@@ -46,7 +46,13 @@ class FreeFeedAPI:
         except httpx.NetworkError as e:
             raise NetworkError(f"Network error: {e}") from e
         except httpx.HTTPStatusError as e:
-            raise ApiError(f"API error: {e.response.status_code} {e.response.text}") from e
+            if e.response.status_code in (401, 403):
+                raise AuthError(
+                    f"Auth error: {e.response.status_code} {e.response.text}"
+                ) from e
+            raise ApiError(
+                f"API error: {e.response.status_code} {e.response.text}"
+            ) from e
         except httpx.RequestError as e:
             raise NetworkError(f"Request error: {e}") from e
 

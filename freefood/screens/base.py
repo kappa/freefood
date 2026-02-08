@@ -1,14 +1,33 @@
 """Base screen class with common error handling."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from textual.screen import Screen
 from textual.widgets import Static
 
 from freefood.base_app import FreeFoodAppBase
 from freefood.logging import log_error
 
+if TYPE_CHECKING:
+    from freefood.api import FreeFeedAPI
+
 
 class BaseScreen(Screen):
     """Base screen with error banner support."""
+
+    @property
+    def app(self) -> FreeFoodAppBase:  # type: ignore[override]
+        """Return app with proper type for screens."""
+        return super().app  # type: ignore[return-value]
+
+    @property
+    def api(self) -> FreeFeedAPI:
+        """Return API client, asserting it's available."""
+        api = self.app.api
+        assert api is not None, "Not connected"
+        return api
 
     # Subclasses should include this in their CSS
     ERROR_BANNER_CSS = """
@@ -42,8 +61,3 @@ class BaseScreen(Screen):
             banner.remove_class("visible")
         except Exception:
             pass
-
-    @property
-    def app(self) -> FreeFoodAppBase:
-        """Type-hinted app property."""
-        return super().app  # type: ignore
