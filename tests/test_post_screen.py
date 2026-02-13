@@ -379,13 +379,9 @@ class TestPostScreenMenuNavigation:
             assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
             assert state.current_view == View.DIRECTS
 
-
-class TestPostScreenBackNavigation:
-    """Tests for back navigation via menu bar."""
-
     @pytest.mark.asyncio
-    async def test_back_with_no_history_does_nothing(self):
-        """Back with empty history should do nothing."""
+    async def test_view_selected_stops_message(self):
+        """on_menu_bar_view_selected should stop the message."""
         post = make_post()
         state = AppState(current_view=View.HOME)
         app = MockApp(state=state)
@@ -395,14 +391,33 @@ class TestPostScreenBackNavigation:
             await pilot.pause()
 
             screen = app.screen
+            msg = MenuBar.ViewSelected(View.HOME)
+            screen.on_menu_bar_view_selected(msg)
+            await pilot.pause()
+            assert msg._stop_propagation
+
+
+class TestPostScreenBackNavigation:
+    """Tests for back navigation via menu bar."""
+
+    @pytest.mark.asyncio
+    async def test_back_with_no_history_notifies(self):
+        """Back with empty history should show 'No history' notification."""
+        post = make_post()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state)
+
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app.push_screen(PostScreen(state, post=post))
+            await pilot.pause()
+
+            screen = app.screen
             assert isinstance(screen, PostScreen)
 
-            # Should not raise, should do nothing
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            # Still on PostScreen
-            assert isinstance(app.screen, PostScreen)
+            assert any("No history" in str(n.message) for n in app._notifications)
 
     @pytest.mark.asyncio
     async def test_back_to_home_pushes_feed_screen(self):
@@ -520,3 +535,20 @@ class TestPostScreenBackNavigation:
 
             # query should remain "old" since entry.query is None
             assert state.search_query == "old"
+
+    @pytest.mark.asyncio
+    async def test_back_stops_message(self):
+        """on_menu_bar_back_requested should stop the message."""
+        post = make_post()
+        state = AppState(current_view=View.HOME)
+        app = MockApp(state=state)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(PostScreen(state, post=post))
+            await pilot.pause()
+
+            screen = app.screen
+            msg = MenuBar.BackRequested()
+            screen.on_menu_bar_back_requested(msg)
+            await pilot.pause()
+            assert msg._stop_propagation
