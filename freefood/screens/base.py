@@ -1,4 +1,4 @@
-"""Base screen class with common error handling."""
+"""Base screen class with common error handling and navigation."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from textual.widgets import Static
 
 from freefood.base_app import FreeFoodAppBase
 from freefood.logging import log_error
+from freefood.models import View
 
 if TYPE_CHECKING:
     from freefood.api import FreeFeedAPI
@@ -61,3 +62,35 @@ class BaseScreen(Screen):
             banner.remove_class("visible")
         except Exception:
             pass
+
+    def push_screen_for_view(self, view: View) -> None:
+        """Push the appropriate screen for a given view."""
+        from freefood.screens.errors import ErrorsScreen
+        from freefood.screens.feed import FeedScreen
+        from freefood.screens.notifications import NotificationsScreen
+        from freefood.screens.search import SearchScreen
+        from freefood.screens.theme import ThemeScreen
+
+        state = self.app.state
+        if view == View.SEARCH:
+            self.app.push_screen(SearchScreen(state))
+        elif view == View.NOTIFICATIONS:
+            self.app.push_screen(NotificationsScreen(state))
+        elif view == View.ERRORS:
+            self.app.push_screen(ErrorsScreen())
+        elif view == View.THEME:
+            self.app.push_screen(ThemeScreen())
+        else:
+            self.app.push_screen(FeedScreen(state))
+
+    def navigate_back(self) -> bool:
+        """Pop history, restore state, push screen. Returns False if empty."""
+        entry = self.app.state.pop_history()
+        if not entry:
+            return False
+        self.app.state.current_view = entry.view
+        self.app.state.current_target = entry.target
+        if entry.query is not None:
+            self.app.state.search_query = entry.query
+        self.push_screen_for_view(entry.view)
+        return True
