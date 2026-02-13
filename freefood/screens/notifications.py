@@ -127,6 +127,13 @@ class NotificationsScreen(BaseScreen):
             self.app.push_screen(ErrorsScreen())
             return
 
+        if message.view == View.THEME:
+            self.state.navigate_to(View.THEME)
+            from freefood.screens.theme import ThemeScreen
+
+            self.app.push_screen(ThemeScreen(self.state))
+            return
+
         if message.view != self.state.current_view:
             self.state.navigate_to(message.view)
         from freefood.screens.feed import FeedScreen

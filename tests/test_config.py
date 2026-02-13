@@ -10,10 +10,12 @@ from freefood.config import (
     get_auth_url,
     get_base_url,
     get_config_path,
+    get_theme,
     get_token,
     get_username,
     load_config,
     save_config,
+    save_theme,
     save_token,
 )
 
@@ -137,6 +139,32 @@ class TestGetBaseUrl:
             with patch("freefood.config.get_config_path", return_value=config_path):
                 url = get_base_url()
                 assert url == "https://freefeed.net"
+
+
+class TestThemeConfig:
+    """Tests for theme persistence."""
+
+    def test_default_theme_is_dark(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.ini"
+            with patch("freefood.config.get_config_path", return_value=config_path):
+                assert get_theme() == "dark"
+
+    def test_save_and_get_theme(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.ini"
+            with patch("freefood.config.get_config_path", return_value=config_path):
+                save_theme("light")
+                assert get_theme() == "light"
+
+    def test_invalid_theme_falls_back_to_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.ini"
+            with patch("freefood.config.get_config_path", return_value=config_path):
+                config = configparser.ConfigParser()
+                config["interface"] = {"theme": "invalid"}
+                save_config(config)
+                assert get_theme() == "dark"
 
 
 class TestGetUsername:

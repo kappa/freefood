@@ -9,13 +9,15 @@ from textual.widgets import Footer
 from freefood.api import FreeFeedAPI
 from freefood.attachments import AttachmentManager
 from freefood.base_app import FreeFoodAppBase
-from freefood.config import get_base_url, get_token, save_token
+from freefood.config import get_base_url, get_theme, get_token, save_theme, save_token
 from freefood.logging import log_error
 from freefood.models import View
 from freefood.screens.auth import AuthScreen
 from freefood.screens.errors import ErrorsScreen
 from freefood.screens.feed import FeedScreen
+from freefood.screens.theme import ThemeScreen
 from freefood.state import AppState
+from freefood.themes import resolve_textual_theme
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
@@ -45,6 +47,7 @@ class FreeFoodApp(FreeFoodAppBase):
 
     async def on_mount(self) -> None:
         """Initialize app on startup."""
+        self.apply_theme(get_theme(), persist=False)
         token = get_token()
         if token:
             await self._try_connect(token)
@@ -104,3 +107,19 @@ class FreeFoodApp(FreeFoodAppBase):
         if message.view == View.ERRORS:
             self.state.navigate_to(View.ERRORS)
             self.push_screen(ErrorsScreen())
+        elif message.view == View.THEME:
+            self.state.navigate_to(View.THEME)
+            self.push_screen(ThemeScreen(self.state))
+
+    def apply_theme(self, theme: str, persist: bool = True) -> None:
+        """Apply and optionally persist a theme by key."""
+        self.theme = resolve_textual_theme(theme)
+        if persist:
+            save_theme(theme)
+
+    def on_theme_screen_theme_selected(
+        self, message: ThemeScreen.ThemeSelected
+    ) -> None:
+        """Handle theme changes from ThemeScreen."""
+        self.apply_theme(message.theme)
+        self.notify(f"Theme switched to {message.theme}")

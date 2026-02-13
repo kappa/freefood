@@ -155,6 +155,13 @@ class SearchScreen(BaseScreen):
             self.app.push_screen(ErrorsScreen())
             return
 
+        if message.view == View.THEME:
+            self.state.navigate_to(View.THEME)
+            from freefood.screens.theme import ThemeScreen
+
+            self.app.push_screen(ThemeScreen(self.state))
+            return
+
         self.state.navigate_to(message.view)
         self._return_to_feed()
 

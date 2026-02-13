@@ -53,6 +53,19 @@ async def test_menu_bar_has_errors_button():
         assert button.label.plain == "Errors"
 
 
+@pytest.mark.asyncio
+async def test_menu_bar_has_theme_button():
+    """MenuBar should have a Theme button."""
+
+    class TestApp(App):
+        def compose(self):
+            yield MenuBar()
+
+    async with TestApp().run_test() as pilot:
+        button = pilot.app.query_one("#theme-button", Button)
+        assert button.label.plain == "Theme"
+
+
 # --- on_button_pressed tests (lines 104-119) ---
 
 
@@ -206,6 +219,26 @@ async def test_menu_bar_clicking_errors_view_button():
         await pilot.pause()
         assert len(messages) == 1
         assert messages[0].view == View.ERRORS
+
+
+@pytest.mark.asyncio
+async def test_menu_bar_clicking_theme_button():
+    """Clicking Theme button should emit ViewSelected with THEME."""
+    messages: list = []
+
+    class TestApp(App):
+        def compose(self):
+            yield MenuBar(current_view=View.HOME)
+
+        def on_menu_bar_view_selected(self, event):
+            messages.append(event)
+
+    async with TestApp().run_test() as pilot:
+        bar = pilot.app.query_one(MenuBar)
+        bar.query_one("#theme-button", Button).press()
+        await pilot.pause()
+        assert len(messages) == 1
+        assert messages[0].view == View.THEME
 
 
 # --- focus_current_view_button tests (lines 146-154) ---

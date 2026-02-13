@@ -110,6 +110,10 @@ class ErrorsScreen(BaseScreen):
             from freefood.screens.search import SearchScreen
 
             self.app.push_screen(SearchScreen(self.app.state))
+        elif message.view == View.THEME:
+            from freefood.screens.theme import ThemeScreen
+
+            self.app.push_screen(ThemeScreen(self.app.state))
         elif message.view == View.NOTIFICATIONS:
             from freefood.screens.notifications import NotificationsScreen
 

@@ -71,6 +71,7 @@ class MenuBar(Widget):
             yield Button("Notifications", id="notifications-button")
             yield Button("Directs", id="directs-button")
             yield Button("Search", id="search-button")
+            yield Button("Theme", id="theme-button")
             yield Button("Errors", id="errors-button")
 
     def on_mount(self) -> None:
@@ -84,6 +85,7 @@ class MenuBar(Widget):
             View.NOTIFICATIONS: "notifications-button",
             View.DIRECTS: "directs-button",
             View.SEARCH: "search-button",
+            View.THEME: "theme-button",
             View.ERRORS: "errors-button",
         }
 
@@ -106,6 +108,7 @@ class MenuBar(Widget):
             "notifications-button": View.NOTIFICATIONS,
             "directs-button": View.DIRECTS,
             "search-button": View.SEARCH,
+            "theme-button": View.THEME,
             "errors-button": View.ERRORS,
         }
 
@@ -148,6 +151,7 @@ class MenuBar(Widget):
             View.NOTIFICATIONS: "notifications-button",
             View.DIRECTS: "directs-button",
             View.SEARCH: "search-button",
+            View.THEME: "theme-button",
             View.ERRORS: "errors-button",
         }
         button_id = view_to_button.get(self.current_view, "home-button")
