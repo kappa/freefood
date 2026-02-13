@@ -79,52 +79,11 @@ class ThemeScreen(BaseScreen):
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
         message.stop()
         if message.view == View.THEME:
-            return
-
+            return  # theme screen is static, nothing to refresh
         self.app.state.navigate_to(message.view)
-
-        if message.view == View.SEARCH:
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.app.state))
-        elif message.view == View.NOTIFICATIONS:
-            from freefood.screens.notifications import NotificationsScreen
-
-            self.app.push_screen(NotificationsScreen(self.app.state))
-        elif message.view == View.ERRORS:
-            from freefood.screens.errors import ErrorsScreen
-
-            self.app.push_screen(ErrorsScreen())
-        else:
-            from freefood.screens.feed import FeedScreen
-
-            self.app.push_screen(FeedScreen(self.app.state))
+        self.push_screen_for_view(message.view)
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
         message.stop()
-        entry = self.app.state.pop_history()
-        if not entry:
+        if not self.navigate_back():
             self.notify("No history")
-            return
-
-        self.app.state.current_view = entry.view
-        self.app.state.current_target = entry.target
-        if entry.query is not None:
-            self.app.state.search_query = entry.query
-
-        if entry.view == View.SEARCH:
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.app.state))
-        elif entry.view == View.NOTIFICATIONS:
-            from freefood.screens.notifications import NotificationsScreen
-
-            self.app.push_screen(NotificationsScreen(self.app.state))
-        elif entry.view == View.ERRORS:
-            from freefood.screens.errors import ErrorsScreen
-
-            self.app.push_screen(ErrorsScreen())
-        else:
-            from freefood.screens.feed import FeedScreen
-
-            self.app.push_screen(FeedScreen(self.app.state))
