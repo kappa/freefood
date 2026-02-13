@@ -102,48 +102,12 @@ class ErrorsScreen(BaseScreen):
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
         message.stop()
         if message.view == View.ERRORS:
+            self.action_refresh()
             return
-
         self.app.state.navigate_to(message.view)
-
-        if message.view == View.SEARCH:
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.app.state))
-        elif message.view == View.THEME:
-            from freefood.screens.theme import ThemeScreen
-
-            self.app.push_screen(ThemeScreen())
-        elif message.view == View.NOTIFICATIONS:
-            from freefood.screens.notifications import NotificationsScreen
-
-            self.app.push_screen(NotificationsScreen(self.app.state))
-        else:
-            from freefood.screens.feed import FeedScreen
-
-            self.app.push_screen(FeedScreen(self.app.state))
+        self.push_screen_for_view(message.view)
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
         message.stop()
-        entry = self.app.state.pop_history()
-        if entry:
-            self.app.state.current_view = entry.view
-            self.app.state.current_target = entry.target
-
-            if entry.view == View.SEARCH:
-                from freefood.screens.search import SearchScreen
-
-                self.app.push_screen(SearchScreen(self.app.state))
-            elif entry.view == View.NOTIFICATIONS:
-                from freefood.screens.notifications import NotificationsScreen
-
-                self.app.push_screen(NotificationsScreen(self.app.state))
-            elif entry.view == View.ERRORS:
-                # Should not really happen from history but handle anyway
-                self.action_refresh()
-            else:
-                from freefood.screens.feed import FeedScreen
-
-                self.app.push_screen(FeedScreen(self.app.state))
-        else:
+        if not self.navigate_back():
             self.notify("No history")

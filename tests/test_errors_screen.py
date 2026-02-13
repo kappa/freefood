@@ -120,8 +120,8 @@ class TestErrorsScreenMenuNavigation:
     """Tests for menu bar view selection navigation."""
 
     @pytest.mark.asyncio
-    async def test_selecting_errors_view_is_noop(self):
-        """Selecting ERRORS view from menu should do nothing (already there)."""
+    async def test_selecting_errors_view_refreshes(self):
+        """Selecting ERRORS view from menu should refresh content."""
         clear_errors()
         app = MockApp()
         async with app.run_test() as pilot:
@@ -131,11 +131,17 @@ class TestErrorsScreenMenuNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
-            # Send ERRORS view selection - should be a no-op
-            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
-            await pilot.pause()
+            count_before = len(app.pushed_screens)
+            with patch.object(screen, "action_refresh") as mock_refresh:
+                screen.on_menu_bar_view_selected(
+                    MenuBar.ViewSelected(View.ERRORS)
+                )
+                await pilot.pause()
 
-            # Should still be on ErrorsScreen
+                mock_refresh.assert_called_once()
+
+            # Should still be on ErrorsScreen (no new screen pushed)
+            assert len(app.pushed_screens) == count_before
             assert isinstance(app.screen, ErrorsScreen)
 
     @pytest.mark.asyncio
@@ -292,8 +298,8 @@ class TestErrorsScreenBackNavigation:
             assert state.current_view == View.NOTIFICATIONS
 
     @pytest.mark.asyncio
-    async def test_back_to_errors_view_refreshes(self):
-        """Back to ERRORS view should call action_refresh."""
+    async def test_back_to_errors_view_pushes_errors_screen(self):
+        """Back to ERRORS view should push a new ErrorsScreen."""
         clear_errors()
 
         state = AppState()
@@ -308,14 +314,10 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
-            # Verify the back handler calls action_refresh for ERRORS view
-            with patch.object(screen, "action_refresh") as mock_refresh:
-                screen.on_menu_bar_back_requested(MenuBar.BackRequested())
-                await pilot.pause()
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
 
-                mock_refresh.assert_called_once()
-
-            # State should be updated to ERRORS
+            assert any(isinstance(s, ErrorsScreen) for s in app.pushed_screens)
             assert state.current_view == View.ERRORS
 
     @pytest.mark.asyncio
