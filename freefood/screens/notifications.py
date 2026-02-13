@@ -109,54 +109,17 @@ class NotificationsScreen(BaseScreen):
         self.run_worker(self.refresh_content())
 
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
-        if message.view == View.SEARCH:
-            if self.state.current_view != View.SEARCH:
-                self.state.navigate_to(View.SEARCH)
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.state))
-            return
-
+        message.stop()
         if message.view == View.NOTIFICATIONS:
+            self.action_refresh()
             return
-
-        if message.view == View.ERRORS:
-            self.state.navigate_to(View.ERRORS)
-            from freefood.screens.errors import ErrorsScreen
-
-            self.app.push_screen(ErrorsScreen())
-            return
-
-        if message.view == View.THEME:
-            self.state.navigate_to(View.THEME)
-            from freefood.screens.theme import ThemeScreen
-
-            self.app.push_screen(ThemeScreen())
-            return
-
-        if message.view != self.state.current_view:
-            self.state.navigate_to(message.view)
-        from freefood.screens.feed import FeedScreen
-
-        self.app.push_screen(FeedScreen(self.state))
+        self.state.navigate_to(message.view)
+        self.push_screen_for_view(message.view)
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
-        entry = self.state.pop_history()
-        if entry:
-            self.state.current_view = entry.view
-            self.state.current_target = entry.target
-            if entry.query:
-                self.state.search_query = entry.query
-            if entry.view == View.SEARCH:
-                from freefood.screens.search import SearchScreen
-
-                self.app.push_screen(SearchScreen(self.state))
-            elif entry.view == View.NOTIFICATIONS:
-                self.app.push_screen(NotificationsScreen(self.state))
-            else:
-                from freefood.screens.feed import FeedScreen
-
-                self.app.push_screen(FeedScreen(self.state))
+        message.stop()
+        if not self.navigate_back():
+            self.notify("No history")
 
     def on_notification_block_user_clicked(
         self, message: NotificationBlock.UserClicked
@@ -164,9 +127,7 @@ class NotificationsScreen(BaseScreen):
         """Handle navigation to a user or group feed."""
         view = View.GROUP_FEED if message.user_type == "group" else View.USER_FEED
         self.state.navigate_to(view, target=message.username)
-        from freefood.screens.feed import FeedScreen
-
-        self.app.push_screen(FeedScreen(self.state))
+        self.push_screen_for_view(view)
 
     async def on_notification_block_post_clicked(
         self, message: NotificationBlock.PostClicked
