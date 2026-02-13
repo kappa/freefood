@@ -159,7 +159,7 @@ class SearchScreen(BaseScreen):
             self.state.navigate_to(View.THEME)
             from freefood.screens.theme import ThemeScreen
 
-            self.app.push_screen(ThemeScreen(self.state))
+            self.app.push_screen(ThemeScreen())
             return
 
         self.state.navigate_to(message.view)

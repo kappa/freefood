@@ -109,7 +109,7 @@ class FreeFoodApp(FreeFoodAppBase):
             self.push_screen(ErrorsScreen())
         elif message.view == View.THEME:
             self.state.navigate_to(View.THEME)
-            self.push_screen(ThemeScreen(self.state))
+            self.push_screen(ThemeScreen())
 
     def apply_theme(self, theme: str, persist: bool = True) -> None:
         """Apply and optionally persist a theme by key."""

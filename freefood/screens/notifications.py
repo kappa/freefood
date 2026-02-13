@@ -131,7 +131,7 @@ class NotificationsScreen(BaseScreen):
             self.state.navigate_to(View.THEME)
             from freefood.screens.theme import ThemeScreen
 
-            self.app.push_screen(ThemeScreen(self.state))
+            self.app.push_screen(ThemeScreen())
             return
 
         if message.view != self.state.current_view:

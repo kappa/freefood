@@ -27,8 +27,5 @@ def get_theme_keys() -> set[str]:
 
 def resolve_textual_theme(theme_key: str) -> str:
     """Resolve a theme key to a Textual theme name."""
-    for option in THEME_OPTIONS:
-        if option.key == theme_key:
-            return option.textual_theme
-
-    return resolve_textual_theme(DEFAULT_THEME_KEY)
+    theme_map = {option.key: option.textual_theme for option in THEME_OPTIONS}
+    return theme_map.get(theme_key, theme_map[DEFAULT_THEME_KEY])
