@@ -133,9 +133,7 @@ class TestErrorsScreenMenuNavigation:
 
             count_before = len(app.pushed_screens)
             with patch.object(screen, "action_refresh") as mock_refresh:
-                screen.on_menu_bar_view_selected(
-                    MenuBar.ViewSelected(View.ERRORS)
-                )
+                screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
                 await pilot.pause()
 
                 mock_refresh.assert_called_once()

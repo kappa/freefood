@@ -919,9 +919,7 @@ class TestFeedScreenMenuNavigation:
 
             from freefood.screens.notifications import NotificationsScreen
 
-            assert any(
-                isinstance(s, NotificationsScreen) for s in app.pushed_screens
-            )
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
     async def test_selecting_own_view_refreshes(self):
@@ -2678,9 +2676,7 @@ class TestMenuViewEdgeCases:
             await pilot.pause()
             from freefood.screens.notifications import NotificationsScreen
 
-            assert any(
-                isinstance(s, NotificationsScreen) for s in app.pushed_screens
-            )
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
     async def test_selecting_errors_from_feed_pushes_errors(self):

@@ -181,9 +181,7 @@ class TestPushScreenForView:
             await pilot.pause()
             from freefood.screens.notifications import NotificationsScreen
 
-            assert any(
-                isinstance(s, NotificationsScreen) for s in app.pushed_screens
-            )
+            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
     async def test_push_errors_screen(self):
@@ -277,9 +275,7 @@ class TestNavigateBack:
     async def test_navigate_back_restores_search_query(self):
         state = AppState()
         state.history.append(
-            HistoryEntry(
-                view=View.SEARCH, target=None, scroll_position=0, query="test"
-            )
+            HistoryEntry(view=View.SEARCH, target=None, scroll_position=0, query="test")
         )
         app = NavMockApp(state=state)
         async with app.run_test() as pilot:

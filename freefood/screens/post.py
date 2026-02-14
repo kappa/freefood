@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
-from freefood.models import Post, View
+from freefood.models import Post
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
