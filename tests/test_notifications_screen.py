@@ -571,8 +571,8 @@ class TestNotificationsBackNavigation:
             assert msg._stop_propagation
 
     @pytest.mark.asyncio
-    async def test_back_to_home_pushes_feed_screen(self):
-        """Back to HOME should push FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -588,17 +588,16 @@ class TestNotificationsBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, NotificationsScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
-    async def test_back_to_search_pushes_search_screen(self):
-        """Back to SEARCH should push SearchScreen."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -614,12 +613,11 @@ class TestNotificationsBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, NotificationsScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.search import SearchScreen
-
-            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.SEARCH
             assert state.search_query == "test"
 

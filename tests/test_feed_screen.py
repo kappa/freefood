@@ -1489,8 +1489,8 @@ class TestBackNavigation:
             assert any("No history" in str(n.message) for n in app._notifications)
 
     @pytest.mark.asyncio
-    async def test_back_to_home_pushes_feed_screen(self):
-        """Back to HOME should push a new FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         api = _make_mock_api()
         state = AppState(current_view=View.DIRECTS)
         state.history.append(
@@ -1502,19 +1502,16 @@ class TestBackNavigation:
             await pilot.pause()
             screen = app.screen
             assert isinstance(screen, FeedScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
             assert state.current_view == View.HOME
             assert state.current_target is None
-            # New FeedScreen should have been pushed
-            assert any(
-                isinstance(s, FeedScreen) and s is not screen
-                for s in app.pushed_screens
-            )
+            assert len(app.screen_stack) < stack_size_before
 
     @pytest.mark.asyncio
-    async def test_back_to_search_pushes_search_screen(self):
-        """Back to SEARCH should push SearchScreen (lines 312-315)."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         api = _make_mock_api()
         state = AppState(current_view=View.HOME)
         state.history.append(
@@ -1526,14 +1523,12 @@ class TestBackNavigation:
             await pilot.pause()
             screen = app.screen
             assert isinstance(screen, FeedScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
             assert state.current_view == View.SEARCH
             assert state.search_query == "test"
-
-            from freefood.screens.search import SearchScreen
-
-            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
 
     @pytest.mark.asyncio
     async def test_back_restores_target(self):
@@ -1549,14 +1544,12 @@ class TestBackNavigation:
             await pilot.pause()
             screen = app.screen
             assert isinstance(screen, FeedScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
             assert state.current_view == View.USER_FEED
             assert state.current_target == "bob"
-            assert any(
-                isinstance(s, FeedScreen) and s is not screen
-                for s in app.pushed_screens
-            )
+            assert len(app.screen_stack) < stack_size_before
 
     @pytest.mark.asyncio
     async def test_back_without_query_does_not_set_search_query(self):

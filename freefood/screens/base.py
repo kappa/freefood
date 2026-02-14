@@ -84,7 +84,7 @@ class BaseScreen(Screen):
             self.app.push_screen(FeedScreen(state))
 
     def navigate_back(self) -> bool:
-        """Pop history, restore state, push screen. Returns False if empty."""
+        """Pop history, restore state, pop screen back to previous."""
         entry = self.app.state.pop_history()
         if not entry:
             return False
@@ -92,5 +92,5 @@ class BaseScreen(Screen):
         self.app.state.current_target = entry.target
         if entry.query is not None:
             self.app.state.search_query = entry.query
-        self.push_screen_for_view(entry.view)
+        self.app.pop_screen()
         return True

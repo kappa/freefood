@@ -316,8 +316,8 @@ class TestThemeScreenBackNavigation:
             assert any("No history" in str(n.message) for n in app._notifications)
 
     @pytest.mark.asyncio
-    async def test_back_to_home_view(self):
-        """Back to HOME should push FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         state = AppState()
         state.history.append(
             HistoryEntry(view=View.HOME, target=None, scroll_position=0)
@@ -331,17 +331,16 @@ class TestThemeScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ThemeScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
-    async def test_back_to_search_view(self):
-        """Back to SEARCH should push SearchScreen."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         state = AppState()
         state.history.append(
             HistoryEntry(view=View.SEARCH, target=None, scroll_position=0, query="test")
@@ -355,18 +354,17 @@ class TestThemeScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ThemeScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.search import SearchScreen
-
-            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.SEARCH
             assert state.search_query == "test"
 
     @pytest.mark.asyncio
-    async def test_back_to_notifications_view(self):
-        """Back to NOTIFICATIONS should push NotificationsScreen."""
+    async def test_back_to_notifications_pops_screen(self):
+        """Back to NOTIFICATIONS should pop the current screen."""
         state = AppState()
         state.history.append(
             HistoryEntry(view=View.NOTIFICATIONS, target=None, scroll_position=0)
@@ -380,12 +378,11 @@ class TestThemeScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ThemeScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.notifications import NotificationsScreen
-
-            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.NOTIFICATIONS
 
     @pytest.mark.asyncio

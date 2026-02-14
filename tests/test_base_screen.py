@@ -253,7 +253,7 @@ class TestNavigateBack:
     """Tests for navigate_back helper."""
 
     @pytest.mark.asyncio
-    async def test_navigate_back_pops_and_pushes(self):
+    async def test_navigate_back_pops_screen(self):
         state = AppState()
         state.history.append(
             HistoryEntry(view=View.HOME, target=None, scroll_position=0)
@@ -263,12 +263,12 @@ class TestNavigateBack:
             await app.push_screen(MinimalScreen())
             await pilot.pause()
             screen = app.screen
+            stack_size_before = len(app.screen_stack)
             result = screen.navigate_back()
             assert result is True
             await pilot.pause()
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            # Back should pop (shrink stack), not push (grow stack)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
