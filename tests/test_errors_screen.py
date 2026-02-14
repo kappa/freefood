@@ -120,8 +120,8 @@ class TestErrorsScreenMenuNavigation:
     """Tests for menu bar view selection navigation."""
 
     @pytest.mark.asyncio
-    async def test_selecting_errors_view_is_noop(self):
-        """Selecting ERRORS view from menu should do nothing (already there)."""
+    async def test_selecting_errors_view_refreshes(self):
+        """Selecting ERRORS view from menu should refresh content."""
         clear_errors()
         app = MockApp()
         async with app.run_test() as pilot:
@@ -131,11 +131,15 @@ class TestErrorsScreenMenuNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
-            # Send ERRORS view selection - should be a no-op
-            screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
-            await pilot.pause()
+            count_before = len(app.pushed_screens)
+            with patch.object(screen, "action_refresh") as mock_refresh:
+                screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.ERRORS))
+                await pilot.pause()
 
-            # Should still be on ErrorsScreen
+                mock_refresh.assert_called_once()
+
+            # Should still be on ErrorsScreen (no new screen pushed)
+            assert len(app.pushed_screens) == count_before
             assert isinstance(app.screen, ErrorsScreen)
 
     @pytest.mark.asyncio
@@ -220,8 +224,8 @@ class TestErrorsScreenBackNavigation:
             assert any("No history" in str(n.message) for n in app._notifications)
 
     @pytest.mark.asyncio
-    async def test_back_to_home_view(self):
-        """Back to HOME should push FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         clear_errors()
         state = AppState()
         state.history.append(
@@ -235,17 +239,16 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
-    async def test_back_to_search_view(self):
-        """Back to SEARCH should push SearchScreen."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         clear_errors()
         state = AppState()
         state.history.append(
@@ -259,17 +262,16 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.search import SearchScreen
-
-            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.SEARCH
 
     @pytest.mark.asyncio
-    async def test_back_to_notifications_view(self):
-        """Back to NOTIFICATIONS should push NotificationsScreen."""
+    async def test_back_to_notifications_pops_screen(self):
+        """Back to NOTIFICATIONS should pop the current screen."""
         clear_errors()
         state = AppState()
         state.history.append(
@@ -283,17 +285,16 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.notifications import NotificationsScreen
-
-            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.NOTIFICATIONS
 
     @pytest.mark.asyncio
-    async def test_back_to_errors_view_refreshes(self):
-        """Back to ERRORS view should call action_refresh."""
+    async def test_back_to_errors_pops_screen(self):
+        """Back to ERRORS view should pop the current screen."""
         clear_errors()
 
         state = AppState()
@@ -308,19 +309,16 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
-            # Verify the back handler calls action_refresh for ERRORS view
-            with patch.object(screen, "action_refresh") as mock_refresh:
-                screen.on_menu_bar_back_requested(MenuBar.BackRequested())
-                await pilot.pause()
+            stack_size_before = len(app.screen_stack)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
 
-                mock_refresh.assert_called_once()
-
-            # State should be updated to ERRORS
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.ERRORS
 
     @pytest.mark.asyncio
-    async def test_back_to_directs_view(self):
-        """Back to DIRECTS (a feed-type view) should push FeedScreen."""
+    async def test_back_to_directs_pops_screen(self):
+        """Back to DIRECTS should pop the current screen."""
         clear_errors()
         state = AppState()
         state.history.append(
@@ -334,10 +332,9 @@ class TestErrorsScreenBackNavigation:
             screen = app.screen
             assert isinstance(screen, ErrorsScreen)
 
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.DIRECTS

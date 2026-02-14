@@ -318,52 +318,17 @@ class FeedScreen(BaseScreen):
 
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
         """Handle view change from menu."""
-        if message.view == View.SEARCH:
-            if self.state.current_view != View.SEARCH:
-                self.state.navigate_to(View.SEARCH)
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.state))
+        message.stop()
+        if message.view == self.state.current_view:
+            self.action_refresh()
             return
-        if message.view == View.NOTIFICATIONS:
-            if self.state.current_view != View.NOTIFICATIONS:
-                self.state.navigate_to(View.NOTIFICATIONS)
-            from freefood.screens.notifications import NotificationsScreen
-
-            self.app.push_screen(NotificationsScreen(self.state))
-            return
-        if message.view == View.ERRORS:
-            if self.state.current_view != View.ERRORS:
-                self.state.navigate_to(View.ERRORS)
-            from freefood.screens.errors import ErrorsScreen
-
-            self.app.push_screen(ErrorsScreen())
-            return
-
-        if message.view != self.state.current_view:
-            self.state.navigate_to(message.view)
-            menu = self.query_one(MenuBar)
-            menu.set_view(message.view)
-        self.run_worker(self.refresh_content())
+        self.state.navigate_to(message.view)
+        self.push_screen_for_view(message.view)
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
         """Handle back request."""
-        entry = self.state.pop_history()
-        if entry:
-            self.state.current_view = entry.view
-            self.state.current_target = entry.target
-            if entry.query:
-                self.state.search_query = entry.query
-            if entry.view == View.SEARCH:
-                from freefood.screens.search import SearchScreen
-
-                self.app.push_screen(SearchScreen(self.state))
-            else:
-                menu = self.query_one(MenuBar)
-                menu.set_view(entry.view)
-                self.run_worker(self.refresh_content())
-                # TODO: Restore scroll_position after content loads
-        else:
+        message.stop()
+        if not self.navigate_back():
             self.notify("No history")
 
     async def on_post_block_expand_comments(
@@ -493,9 +458,7 @@ class FeedScreen(BaseScreen):
         """Handle navigation to a user or group feed."""
         view = View.GROUP_FEED if message.user_type == "group" else View.USER_FEED
         self.state.navigate_to(view, target=message.username)
-        menu = self.query_one(MenuBar)
-        menu.set_view(view)
-        await self.refresh_content()
+        self.push_screen_for_view(view)
 
     async def on_compose_block_post_requested(
         self, message: ComposeBlock.PostRequested

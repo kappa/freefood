@@ -401,8 +401,8 @@ class TestSearchMenuNavigation:
     """Tests for menu bar view selection navigation."""
 
     @pytest.mark.asyncio
-    async def test_selecting_search_focuses_input(self):
-        """Selecting SEARCH view should focus the search input."""
+    async def test_selecting_search_refreshes(self):
+        """Selecting SEARCH view should refresh results."""
         api = FakeAPI([])
         state = AppState(current_view=View.SEARCH)
         app = MockApp(state=state, api=api)
@@ -413,11 +413,13 @@ class TestSearchMenuNavigation:
 
             screen = app.screen
             assert isinstance(screen, SearchScreen)
+
+            count_before = len(app.pushed_screens)
             screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.SEARCH))
             await pilot.pause()
 
-            focused = app.focused
-            assert isinstance(focused, Input)
+            # Should stay on same screen (no new push)
+            assert len(app.pushed_screens) == count_before
 
     @pytest.mark.asyncio
     async def test_selecting_notifications_navigates(self):
@@ -460,29 +462,13 @@ class TestSearchMenuNavigation:
             assert any(isinstance(s, ErrorsScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
-    async def test_selecting_home_navigates_to_feed(self):
-        """Selecting HOME view should navigate to FeedScreen."""
+    async def test_selecting_home_pushes_feed_screen(self):
+        """Selecting HOME view should push FeedScreen."""
         api = FakeAPI([])
         state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
 
-        class FeedMockApp(App):
-            """Special mock that tracks pop + checks screen."""
-
-            def __init__(self):
-                super().__init__()
-                self.state = state
-                self.api = api
-                self.popped = False
-
-            async def on_mount(self) -> None:
-                from freefood.screens.feed import FeedScreen
-
-                # Push a FeedScreen first so pop_screen works
-                self.push_screen(FeedScreen(self.state))
-
-        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
-            await pilot.pause()
-            app = pilot.app
+        async with app.run_test(size=(80, 20)) as pilot:
             await app.push_screen(SearchScreen(state))
             await pilot.pause()
 
@@ -491,28 +477,18 @@ class TestSearchMenuNavigation:
             screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.HOME))
             await pilot.pause()
 
-            assert state.current_view == View.HOME
+            from freefood.screens.feed import FeedScreen
+
+            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
-    async def test_selecting_directs_navigates_to_feed(self):
-        """Selecting DIRECTS view should navigate to FeedScreen."""
+    async def test_selecting_directs_pushes_feed_screen(self):
+        """Selecting DIRECTS view should push FeedScreen."""
         api = FakeAPI([])
         state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
 
-        class FeedMockApp(App):
-            def __init__(self):
-                super().__init__()
-                self.state = state
-                self.api = api
-
-            async def on_mount(self) -> None:
-                from freefood.screens.feed import FeedScreen
-
-                self.push_screen(FeedScreen(self.state))
-
-        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
-            await pilot.pause()
-            app = pilot.app
+        async with app.run_test(size=(80, 20)) as pilot:
             await app.push_screen(SearchScreen(state))
             await pilot.pause()
 
@@ -521,7 +497,26 @@ class TestSearchMenuNavigation:
             screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.DIRECTS))
             await pilot.pause()
 
-            assert state.current_view == View.DIRECTS
+            from freefood.screens.feed import FeedScreen
+
+            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+
+    @pytest.mark.asyncio
+    async def test_view_selected_stops_message(self):
+        """on_menu_bar_view_selected should stop the message."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            msg = MenuBar.ViewSelected(View.HOME)
+            screen.on_menu_bar_view_selected(msg)
+            await pilot.pause()
+            assert msg._stop_propagation
 
 
 class TestSearchBackNavigation:
@@ -547,41 +542,31 @@ class TestSearchBackNavigation:
             assert any("No history" in str(n.message) for n in app._notifications)
 
     @pytest.mark.asyncio
-    async def test_back_to_home_returns_to_feed(self):
-        """Back to HOME should navigate to FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         api = FakeAPI([])
         state = AppState(current_view=View.SEARCH)
         state.history.append(
             HistoryEntry(view=View.HOME, target=None, scroll_position=0)
         )
+        app = MockApp(state=state, api=api)
 
-        class FeedMockApp(App):
-            def __init__(self):
-                super().__init__()
-                self.state = state
-                self.api = api
-
-            async def on_mount(self) -> None:
-                from freefood.screens.feed import FeedScreen
-
-                self.push_screen(FeedScreen(self.state))
-
-        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
-            await pilot.pause()
-            app = pilot.app
+        async with app.run_test(size=(80, 20)) as pilot:
             await app.push_screen(SearchScreen(state))
             await pilot.pause()
 
             screen = app.screen
             assert isinstance(screen, SearchScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
-    async def test_back_to_search_refreshes(self):
-        """Back to SEARCH should refresh results with the saved query."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         posts = [make_post()]
         api = FakeAPI(posts)
         state = AppState(current_view=View.SEARCH)
@@ -596,15 +581,17 @@ class TestSearchBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, SearchScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.SEARCH
             assert state.search_query == "old"
 
     @pytest.mark.asyncio
-    async def test_back_to_notifications_pushes_notifications_screen(self):
-        """Back to NOTIFICATIONS should push NotificationsScreen."""
+    async def test_back_to_notifications_pops_screen(self):
+        """Back to NOTIFICATIONS should pop the current screen."""
         api = FakeAPI([])
         state = AppState(current_view=View.SEARCH)
         state.history.append(
@@ -618,12 +605,11 @@ class TestSearchBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, SearchScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.notifications import NotificationsScreen
-
-            assert any(isinstance(s, NotificationsScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.NOTIFICATIONS
 
     @pytest.mark.asyncio
@@ -634,29 +620,19 @@ class TestSearchBackNavigation:
         state.history.append(
             HistoryEntry(view=View.USER_FEED, target="bob", scroll_position=0)
         )
+        app = MockApp(state=state, api=api)
 
-        class FeedMockApp(App):
-            def __init__(self):
-                super().__init__()
-                self.state = state
-                self.api = api
-
-            async def on_mount(self) -> None:
-                from freefood.screens.feed import FeedScreen
-
-                self.push_screen(FeedScreen(self.state))
-
-        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
-            await pilot.pause()
-            app = pilot.app
+        async with app.run_test(size=(80, 20)) as pilot:
             await app.push_screen(SearchScreen(state))
             await pilot.pause()
 
             screen = app.screen
             assert isinstance(screen, SearchScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.USER_FEED
             assert state.current_target == "bob"
 
@@ -668,21 +644,9 @@ class TestSearchBackNavigation:
         state.history.append(
             HistoryEntry(view=View.HOME, target=None, scroll_position=0, query=None)
         )
+        app = MockApp(state=state, api=api)
 
-        class FeedMockApp(App):
-            def __init__(self):
-                super().__init__()
-                self.state = state
-                self.api = api
-
-            async def on_mount(self) -> None:
-                from freefood.screens.feed import FeedScreen
-
-                self.push_screen(FeedScreen(self.state))
-
-        async with FeedMockApp().run_test(size=(80, 20)) as pilot:
-            await pilot.pause()
-            app = pilot.app
+        async with app.run_test(size=(80, 20)) as pilot:
             await app.push_screen(SearchScreen(state))
             await pilot.pause()
 
@@ -691,8 +655,24 @@ class TestSearchBackNavigation:
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            # query should not be overwritten
             assert state.search_query == "existing"
+
+    @pytest.mark.asyncio
+    async def test_back_stops_message(self):
+        """on_menu_bar_back_requested should stop the message."""
+        api = FakeAPI([])
+        state = AppState(current_view=View.SEARCH)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(SearchScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            msg = MenuBar.BackRequested()
+            screen.on_menu_bar_back_requested(msg)
+            await pilot.pause()
+            assert msg._stop_propagation
 
 
 class TestSearchRefreshEmptyQuery:

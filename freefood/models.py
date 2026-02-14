@@ -87,6 +87,7 @@ class View(Enum):
     USER_FEED = "user_feed"
     GROUP_FEED = "group_feed"
     ERRORS = "errors"
+    THEME = "theme"
 
 
 @dataclass

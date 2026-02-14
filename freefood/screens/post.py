@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
-from freefood.models import Post, View
+from freefood.models import Post
 from freefood.screens.base import BaseScreen
 from freefood.state import AppState
 from freefood.widgets.menu import MenuBar
@@ -90,47 +90,11 @@ class PostScreen(BaseScreen):
         self.run_worker(self.refresh_content())
 
     def on_menu_bar_view_selected(self, message: MenuBar.ViewSelected) -> None:
-        if message.view == View.SEARCH:
-            self.state.navigate_to(View.SEARCH)
-            from freefood.screens.search import SearchScreen
-
-            self.app.push_screen(SearchScreen(self.state))
-            return
-        if message.view == View.NOTIFICATIONS:
-            self.state.navigate_to(View.NOTIFICATIONS)
-            from freefood.screens.notifications import NotificationsScreen
-
-            self.app.push_screen(NotificationsScreen(self.state))
-            return
-        if message.view == View.ERRORS:
-            self.state.navigate_to(View.ERRORS)
-            from freefood.screens.errors import ErrorsScreen
-
-            self.app.push_screen(ErrorsScreen())
-            return
-
+        message.stop()
         self.state.navigate_to(message.view)
-        from freefood.screens.feed import FeedScreen
-
-        self.app.push_screen(FeedScreen(self.state))
+        self.push_screen_for_view(message.view)
 
     def on_menu_bar_back_requested(self, message: MenuBar.BackRequested) -> None:
-        entry = self.state.pop_history()
-        if entry:
-            self.state.current_view = entry.view
-            self.state.current_target = entry.target
-            if entry.query:
-                self.state.search_query = entry.query
-
-            if entry.view == View.SEARCH:
-                from freefood.screens.search import SearchScreen
-
-                self.app.push_screen(SearchScreen(self.state))
-            elif entry.view == View.NOTIFICATIONS:
-                from freefood.screens.notifications import NotificationsScreen
-
-                self.app.push_screen(NotificationsScreen(self.state))
-            else:
-                from freefood.screens.feed import FeedScreen
-
-                self.app.push_screen(FeedScreen(self.state))
+        message.stop()
+        if not self.navigate_back():
+            self.notify("No history")

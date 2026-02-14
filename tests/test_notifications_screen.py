@@ -416,8 +416,8 @@ class TestNotificationsMenuNavigation:
             assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
 
     @pytest.mark.asyncio
-    async def test_selecting_notifications_is_noop(self):
-        """Selecting NOTIFICATIONS view should do nothing (already there)."""
+    async def test_selecting_notifications_refreshes(self):
+        """Selecting NOTIFICATIONS view should refresh content."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -431,13 +431,34 @@ class TestNotificationsMenuNavigation:
             screen = app.screen
             assert isinstance(screen, NotificationsScreen)
 
-            # Record count before
+            # Record count before — no new screen should be pushed
             count_before = len(app.pushed_screens)
+            api.get_notifications.reset_mock()
             screen.on_menu_bar_view_selected(MenuBar.ViewSelected(View.NOTIFICATIONS))
             await pilot.pause()
 
-            # No new screens should have been pushed
             assert len(app.pushed_screens) == count_before
+            # But refresh should have been triggered
+            api.get_notifications.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_view_selected_stops_message(self):
+        """on_menu_bar_view_selected should stop the message."""
+        api = AsyncMock()
+        api.get_notifications = AsyncMock(return_value=[])
+        api.get_unread_notifications_count = AsyncMock(return_value=0)
+        state = AppState(current_view=View.NOTIFICATIONS)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20)) as pilot:
+            await app.push_screen(NotificationsScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            msg = MenuBar.ViewSelected(View.HOME)
+            screen.on_menu_bar_view_selected(msg)
+            await pilot.pause()
+            assert msg._stop_propagation
 
     @pytest.mark.asyncio
     async def test_selecting_errors_navigates(self):
@@ -511,8 +532,28 @@ class TestNotificationsBackNavigation:
     """Tests for back navigation via menu bar."""
 
     @pytest.mark.asyncio
-    async def test_back_with_no_history_does_nothing(self):
-        """Back with empty history should do nothing."""
+    async def test_back_with_no_history_notifies(self):
+        """Back with empty history should show 'No history' notification."""
+        api = AsyncMock()
+        api.get_notifications = AsyncMock(return_value=[])
+        api.get_unread_notifications_count = AsyncMock(return_value=0)
+        state = AppState(current_view=View.NOTIFICATIONS)
+        app = MockApp(state=state, api=api)
+
+        async with app.run_test(size=(80, 20), notifications=True) as pilot:
+            await app.push_screen(NotificationsScreen(state))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, NotificationsScreen)
+            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            await pilot.pause()
+
+            assert any("No history" in str(n.message) for n in app._notifications)
+
+    @pytest.mark.asyncio
+    async def test_back_stops_message(self):
+        """on_menu_bar_back_requested should stop the message."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -524,16 +565,14 @@ class TestNotificationsBackNavigation:
             await pilot.pause()
 
             screen = app.screen
-            assert isinstance(screen, NotificationsScreen)
-            screen.on_menu_bar_back_requested(MenuBar.BackRequested())
+            msg = MenuBar.BackRequested()
+            screen.on_menu_bar_back_requested(msg)
             await pilot.pause()
-
-            # Still on NotificationsScreen
-            assert isinstance(app.screen, NotificationsScreen)
+            assert msg._stop_propagation
 
     @pytest.mark.asyncio
-    async def test_back_to_home_pushes_feed_screen(self):
-        """Back to HOME should push FeedScreen."""
+    async def test_back_to_home_pops_screen(self):
+        """Back to HOME should pop the current screen."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -549,17 +588,16 @@ class TestNotificationsBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, NotificationsScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.feed import FeedScreen
-
-            assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.HOME
 
     @pytest.mark.asyncio
-    async def test_back_to_search_pushes_search_screen(self):
-        """Back to SEARCH should push SearchScreen."""
+    async def test_back_to_search_pops_screen(self):
+        """Back to SEARCH should pop the current screen."""
         api = AsyncMock()
         api.get_notifications = AsyncMock(return_value=[])
         api.get_unread_notifications_count = AsyncMock(return_value=0)
@@ -575,12 +613,11 @@ class TestNotificationsBackNavigation:
 
             screen = app.screen
             assert isinstance(screen, NotificationsScreen)
+            stack_size_before = len(app.screen_stack)
             screen.on_menu_bar_back_requested(MenuBar.BackRequested())
             await pilot.pause()
 
-            from freefood.screens.search import SearchScreen
-
-            assert any(isinstance(s, SearchScreen) for s in app.pushed_screens)
+            assert len(app.screen_stack) < stack_size_before
             assert state.current_view == View.SEARCH
             assert state.search_query == "test"
 

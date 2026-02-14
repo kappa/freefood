@@ -7,6 +7,7 @@ import pytest
 from freefood.app import FreeFoodApp
 from freefood.models import Attachment, User, View
 from freefood.screens.auth import AuthScreen
+from freefood.screens.theme import ThemeScreen
 from freefood.widgets.menu import MenuBar
 from freefood.widgets.post import PostBlock
 
@@ -39,6 +40,7 @@ class TestAppMount:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token") as mock_save,
@@ -55,7 +57,10 @@ class TestAppMount:
     @pytest.mark.asyncio
     async def test_mount_without_token_shows_auth_screen(self):
         """When no token is stored, on_mount pushes AuthScreen."""
-        with patch("freefood.app.get_token", return_value=None):
+        with (
+            patch("freefood.app.get_token", return_value=None),
+            patch("freefood.app.get_theme", return_value="dark"),
+        ):
             async with FreeFoodApp().run_test() as pilot:
                 assert isinstance(pilot.app.screen, AuthScreen)
 
@@ -68,6 +73,7 @@ class TestAppMount:
 
         with (
             patch("freefood.app.get_token", return_value="bad-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
         ):
@@ -92,6 +98,7 @@ class TestAuthTokenSubmitted:
 
         with (
             patch("freefood.app.get_token", return_value=None),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -122,6 +129,7 @@ class TestAppUnmount:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -135,7 +143,10 @@ class TestAppUnmount:
     @pytest.mark.asyncio
     async def test_unmount_without_api_only_closes_attachments(self):
         """on_unmount only closes attachments when there is no API."""
-        with patch("freefood.app.get_token", return_value=None):
+        with (
+            patch("freefood.app.get_token", return_value=None),
+            patch("freefood.app.get_theme", return_value="dark"),
+        ):
             async with FreeFoodApp().run_test() as pilot:
                 assert pilot.app.api is None
                 attachments_close = AsyncMock()
@@ -166,6 +177,7 @@ class TestAttachmentOpened:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -199,6 +211,7 @@ class TestAttachmentOpened:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -237,6 +250,7 @@ class TestAttachmentOpened:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -269,6 +283,7 @@ class TestMenuBarViewSelected:
 
         with (
             patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
             patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
             patch("freefood.app.FreeFeedAPI", return_value=mock_api),
             patch("freefood.app.save_token"),
@@ -279,3 +294,25 @@ class TestMenuBarViewSelected:
                 await pilot.pause()
 
                 assert pilot.app.state.current_view == View.ERRORS
+
+    @pytest.mark.asyncio
+    async def test_theme_selected_is_applied_and_saved(self):
+        """Selecting a theme should update app theme and persist it."""
+        mock_user = User(id="u1", username="alice", screen_name="Alice", type="user")
+        mock_api = AsyncMock()
+        mock_api.validate_token = AsyncMock(return_value=mock_user)
+        mock_api.close = AsyncMock()
+
+        with (
+            patch("freefood.app.get_token", return_value="test-token"),
+            patch("freefood.app.get_theme", return_value="dark"),
+            patch("freefood.app.get_base_url", return_value="https://freefeed.net"),
+            patch("freefood.app.FreeFeedAPI", return_value=mock_api),
+            patch("freefood.app.save_token"),
+            patch("freefood.app.save_theme") as mock_save_theme,
+        ):
+            async with FreeFoodApp().run_test() as pilot:
+                message = ThemeScreen.ThemeSelected("light")
+                pilot.app.on_theme_screen_theme_selected(message)
+                assert pilot.app.theme == "textual-light"
+                mock_save_theme.assert_called_with("light")

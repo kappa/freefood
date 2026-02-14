@@ -5,6 +5,8 @@ from pathlib import Path
 
 from platformdirs import user_config_dir
 
+from freefood.themes import DEFAULT_THEME_KEY, get_theme_keys
+
 APP_NAME = "freefood"
 
 AUTH_SCOPES = (
@@ -66,6 +68,24 @@ def get_attachment_open_mode() -> str:
     """Get attachment open mode (native or browser, defaults to native)."""
     config = load_config()
     return config.get("attachments", "open_mode", fallback="native")
+
+
+def get_theme() -> str:
+    """Get selected interface theme (defaults to dark)."""
+    config = load_config()
+    theme = config.get("interface", "theme", fallback=DEFAULT_THEME_KEY)
+    if theme not in get_theme_keys():
+        return DEFAULT_THEME_KEY
+    return theme
+
+
+def save_theme(theme: str) -> None:
+    """Persist selected interface theme."""
+    config = load_config()
+    if "interface" not in config:
+        config["interface"] = {}
+    config["interface"]["theme"] = theme
+    save_config(config)
 
 
 def save_token(token: str, username: str) -> None:
