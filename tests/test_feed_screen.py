@@ -324,11 +324,12 @@ class TestAutoSelectionOnScroll:
 
             assert app.focused is post_blocks[0], "Setup: first post should be focused"
 
-            # Scroll down multiple times to push first post out of view
-            # This should eventually trigger auto-selection to a visible post
-            for _ in range(30):
-                await pilot.press("down")
-                await pilot.pause()
+            # Scroll down to push first post out of view
+            # This should trigger auto-selection to a visible post
+            container.scroll_to(y=100)
+            await pilot.pause()
+            # Wait for the timer in FeedContainer to fire and focus to move
+            await pilot.pause()
 
             # The focused widget should NOT be post_blocks[0] anymore
             # because it has scrolled out of view

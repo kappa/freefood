@@ -2726,13 +2726,13 @@ class TestPostBlockCommentEditing:
             edit_btn = app.query_one("#comment-edit-c_edit2", Button)
             edit_btn.press()
             await pilot.pause()
-            await pilot.pause(delay=0.1)
 
             # Cancel editing
             cancel_btn = app.query_one("#btn-cancel-comment-edit", Button)
             cancel_btn.press()
             await pilot.pause()
-            await pilot.pause(delay=0.1)
+            # Wait for timer
+            await pilot.pause()
 
             # Comment block should not be editing anymore
             comment_block = app.query_one(CommentBlock)
@@ -3112,12 +3112,12 @@ class TestPostBlockOnKeyEdgeCases:
             edit_btn = app.query_one("#comment-edit-c_esc", Button)
             edit_btn.press()
             await pilot.pause()
-            await pilot.pause(delay=0.1)
 
             # Press escape to cancel
             await pilot.press("escape")
             await pilot.pause()
-            await pilot.pause(delay=0.1)
+            # Wait for timer
+            await pilot.pause()
 
             comment_block = app.query_one(CommentBlock)
             assert comment_block.editing is False
