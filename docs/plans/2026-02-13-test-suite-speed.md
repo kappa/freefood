@@ -1,7 +1,7 @@
 # Test Suite Speed Analysis
 
 **Date:** 2026-02-13
-**Status:** Not started (lower priority)
+**Status:** Partially done — items 4 and 5 implemented, suite runs in ~16s (was ~120s)
 
 ## Current State
 
@@ -49,6 +49,6 @@ This overhead adds up across 622 tests. There's no single catastrophic test (exc
 
 3. **Speed up ErrorsScreen mount** — The 4 navigation tests that push ErrorsScreen are all >1s. ErrorsScreen's compose reads the error log and creates widgets. Could be lazy-loaded or simplified in test context.
 
-4. **Fix the scroll test outlier** — 5.47s for one test is excessive. It likely uses `set_timer` with real delays. Could use smaller delays or mock timers.
+4. ~~**Fix the scroll test outlier**~~ — DONE. Replaced 30 `press("down")` iterations with single `scroll_to(y=100)`. Also removed unnecessary `delay=0.1` pauses in comment editing tests.
 
-5. **Parallel test execution** — Use `pytest-xdist` to run tests across multiple processes. Would require making tests independent (no shared global state like the error log).
+5. ~~**Parallel test execution**~~ — DONE. Added `pytest-xdist` with `-n auto`. Suite dropped from ~120s to ~16s.

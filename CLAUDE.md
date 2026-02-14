@@ -58,6 +58,13 @@ New code must include tests. Coverage must not regress.
 
 Never write production code without a failing test first.
 
+## Testing Practices
+
+**Assert behavior, not implementation.** Tests should verify *what* the code achieves (state changes, visible output, user-facing behavior), not *how* it achieves it (which internal method was called, what intermediary data structures look like). Tests that assert on outcomes survive refactors; tests that assert on mechanics break when implementation changes even if behavior is identical.
+
+- Good: `assert state.current_view == View.HOME` (observable outcome)
+- Bad: `assert any(isinstance(s, FeedScreen) for s in app.pushed_screens)` (implementation detail)
+
 ## Project Structure
 
 - `freefood/` - Main package
